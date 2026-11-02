@@ -124,20 +124,48 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const activityText=activity.length?"\n\n**Recent activity**\n"+activity.map(entry=>"• "+eventLabel(entry.event,entry.actor_id,entry.other_id)+" · <t:"+Math.floor(entry.created_at/1000)+":R>").join("\n"):"\n\nNo session activity yet.";
   const sessionText="**Your private sessions**\n"+(sessions.length?sessions.join("\n"):"No active private sessions found")+(invites.length?"\n\n**Pending invitations**\n"+invites.join("\n"):"\n\nNo pending invitations.")+activityText;
   const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured")+"\n\nManage with /configure-roles and /session-channel.";
+  const commandGroups=[
+    ["General",["help","dashboard","profile","leaderboard","dice","keyholder-chat","reward-list","punishment-list"]],
+    ["Account and locks",["link-chaster","chaster-link-status","unlink-chaster","lock-status","keyholder-locks","lock-details","lock-seal","lock-history","time-change","keyholder-notes","keyholder-notes-delete","keyholder-applications"]],
+    ["Profiles and discovery",["chaster-profile","chaster-user-overview","chaster-user-stats","chaster-achievements","chaster-badges","chaster-achievement-categories","chaster-public-locks","shared-locks","shared-lock-details","shared-lock-tags","shared-lock-favorite","shared-lock-favorite-add","shared-lock-favorite-remove","shared-lock-archive","chaster-extensions","chaster-explore-categories","chaster-settings","permission-catalog","chaster-lock-stats-config","chaster-community-categories"]],
+    ["Messaging and notifications",["chaster-conversations","chaster-conversation","chaster-messages","chaster-ignored-users","chaster-blocks","chaster-notifications","chaster-notification-health","chaster-notification-read","chaster-notifications-read-all","notifications","notification-status"]],
+    ["Calendar",["chaster-calendar","chaster-calendar-stats","calendar-event-add","calendar-event-edit","calendar-event-delete"]],
+    ["Community",["challenge","challenge-join","reward-add","punishment-add"]],
+    ["Roles and sessions",["configure-roles","sync-roles","session-channel","session-invite"]],
+    ["Server administration",["notification-queue-status","notification-health","notification-failures","notification-history","notification-report","notification-retention","notification-retry","notify-channel","challenge-approve","award-points","audit"]]
+  ];
+  const wearerOnly=new Set(["lock-status","keyholder-applications"]);
+  const keyholderOnly=new Set(["keyholder-locks","time-change","keyholder-notes","keyholder-notes-delete"]);
+  const adminOnly=new Set(["configure-roles","session-channel","notification-queue-status","notification-health","notification-failures","notification-history","notification-report","notification-retention","notification-retry","notify-channel","challenge-approve","award-points","audit"]);
+  const canManageRoles=member.permissions.has(PermissionFlagsBits.ManageRoles);
+  const canManageGuild=member.permissions.has(PermissionFlagsBits.ManageGuild);
+  const commandByName=new Map(commands.map(command=>{const data=command.toJSON();return [data.name,data];}));
+  const commandDirectory=commandGroups.map(([heading,names])=>{
+    const visible=names.filter(name=>{
+      if(!commandByName.has(name))return false;
+      if(wearerOnly.has(name)&&(!settings.wearer_role_id||!member.roles.cache.has(settings.wearer_role_id)))return false;
+      if(keyholderOnly.has(name)&&(!settings.keyholder_role_id||!member.roles.cache.has(settings.keyholder_role_id)))return false;
+      if(adminOnly.has(name)&&(name==="configure-roles"?!canManageRoles:!canManageGuild))return false;
+      return true;
+    });
+    return visible.length?"**"+heading+"**\n"+visible.map(name=>"`/"+name+"`").join(" · "):"";
+  }).filter(Boolean).join("\n\n");
   let body;
   if(tab==="roles")body=roles;
-  else if(tab==="sessions")body=sessionText;
-  else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse /link-chaster to connect or reconnect, /chaster-link-status for connection diagnostics, and /unlink-chaster to remove the saved connection.";
+  else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
+  else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nCommands: /link-chaster · /chaster-link-status · /unlink-chaster";
+  else if(tab==="commands")body="**Command directory**\nCommands are shown when your current server permissions and configured roles allow them.\n\n"+(commandDirectory||"No commands available for your current roles and permissions.");
   else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
-  else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\nActive wearer locks: "+personalLocks.length+"\nActive keyholder locks: "+keyholderLocks.length+(lockLoadError?"\nLock data: unavailable":"")+"\n\nChoose a tab below to see details.";
+  else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not assigned")+(settings.wearer_role_id?"":" · Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\nActive wearer locks: "+personalLocks.length+"\nActive keyholder locks: "+keyholderLocks.length+(lockLoadError?"\nLock data: unavailable":"")+"\n\nChoose a tab below to see details.";
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"]];
+  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["commands","Commands"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
-  const nav=new ActionRowBuilder().addComponents(...tabs.map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary)));
+  const rows=[];
+  for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
   const refresh=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashboard:refresh:"+tab+":"+userId).setLabel("Refresh").setStyle(ButtonStyle.Success));
-  const rows=[nav,refresh];
+  rows.push(refresh);
   if(tab==="sessions"){
     const data=getMemberSessionDashboard(guild.id,userId);
     const actions=[];
