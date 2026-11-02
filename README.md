@@ -19,7 +19,7 @@ Independent Discord companion for Chaster using the official Public API.
 - Profiles, points, leaderboards, community challenges and admin approval
 - Configurable text-only reward and optional consequence ideas
 - Dice game and optional AI-compatible keyholder persona
-- Notification-channel configuration and admin audit command
+- Notification-channel configuration, member notification pause/resume and status, privacy-preserving admin delivery-queue counts, and admin audit command
 - Configurable Wearer/Keyholder role synchronization and role-gated commands
 - Mutual-consent private Discord session invitations using private threads
 
@@ -81,7 +81,7 @@ Official documentation:
 - The bot never asks for Chaster passwords; users link through OAuth.
 - AI cannot call lock APIs. Time changes require a linked keyholder, a matching lock in Chaster's keyholder-lock search, and a separate explicit confirmation.
 - Time changes are limited to 24 hours per command. Chaster remains authoritative and may reject a request.
-- Lock-change notifications are opt-in and polled every five minutes; they are not instantaneous webhooks. Detected changes and Chaster reauthorization alerts enter a persistent SQLite queue before delivery. The worker resumes pending messages after restarts, suppresses duplicate event enqueues, retries transient Discord failures with capped backoff, and marks permanent failures (such as blocked DMs or missing channels) for operator review.
+- Lock-change notifications are opt-in and polled every five minutes; they are not instantaneous webhooks. Detected changes and Chaster reauthorization alerts enter a persistent SQLite queue before delivery. The worker resumes pending messages after restarts, suppresses duplicate event enqueues, retries transient Discord failures with capped backoff, and marks permanent failures (such as blocked DMs or missing channels) for operator review. Members can pause/resume updates with `/notifications` and inspect their setting with `/notification-status`; administrators with Manage Server can view aggregate pending/sent/failed counts with `/notification-queue-status`, which never exposes message contents or recipient details.
 - Reward/consequence items are suggestions only; keep them consensual, optional, non-physical and non-financial.
 - AI is optional; without provider settings, the bot uses a scripted fallback.
 - Chaster's API is beta. Test with a Chaster test lock and confirm current endpoint schemas before production.
