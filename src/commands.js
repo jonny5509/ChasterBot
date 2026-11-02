@@ -88,7 +88,7 @@ new SlashCommandBuilder().setName("session-invite").setDescription("Invite anoth
 function lockLine(l){const title=String(l.title||"Untitled lock").slice(0,70);let t="time hidden/unavailable";if(l.isAllowedToViewTime!==false&&l.endDate){const s=Math.max(0,Math.floor((new Date(l.endDate).getTime()-Date.now())/1000));t=Math.floor(s/86400)+"d "+Math.floor(s%86400/3600)+"h "+Math.floor(s%3600/60)+"m";}return "• **"+title+"** — "+String(l.status||"unknown")+(l.isFrozen?" · frozen":"")+" · "+t+" · ID: `"+(l._id||l.id)+"`";}
 async function accessToken(id){if(!getLinkedAccount(id))throw new Error("Link your Chaster account first with /link-chaster.");const t=await getTokensForDiscordUser(id);if(!t?.access_token)throw new Error("Chaster session expired. Run /link-chaster again.");return t.access_token;}
 async function requireConfiguredRole(i,kind){if(!i.guildId)return false;const settings=getRoleSettings().find(x=>x.guild_id===i.guildId);const roleId=kind==="wearer"?settings?.wearer_role_id:settings?.keyholder_role_id;if(!roleId){await i.reply({ephemeral:true,content:"This server has not configured the "+kind+" role yet. An admin must run /configure-roles first."});return false;}const member=i.member?.roles?.cache?i.member:await i.guild.members.fetch(i.user.id);if(!member.roles.cache.has(roleId)){await i.reply({ephemeral:true,content:"This command is available to members with the configured **"+(kind==="wearer"?"Wearer":"Keyholder")+"** role. Your role is updated automatically from Chaster; try /sync-roles if it is missing."});return false;}return true;}
-async function buildMemberDashboard(guild,user,isAdmin=false){
+async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const member=await guild.members.fetch(user.id);
   const linked=Boolean(getLinkedAccount(user.id));
   const linkHealth=getChasterLinkHealth(user.id);
@@ -101,21 +101,32 @@ async function buildMemberDashboard(guild,user,isAdmin=false){
     if(thread&&!thread.archived)sessions.push("<#"+session.thread_id+"> · <@"+(session.inviter_id===user.id?session.invitee_id:session.inviter_id)+">");
   }
   const invites=data.invites.map(inv=>inv.invitee_id===user.id?"Incoming invitation from <@"+inv.inviter_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>":"Invitation sent to <@"+inv.invitee_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>");
-  const lines=[
-    "**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy"):"Not linked · use /link-chaster"),
-    "**Server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id),
-    "**Private sessions**\n"+(sessions.length?sessions.join("\n"):"No active private sessions found")+(invites.length?"\n"+invites.join("\n"):"")
-  ];
-  if(isAdmin)lines.push("**Server setup**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured"));
-  return "**ChasterBot dashboard · "+guild.name+"**\n"+lines.join("\n\n")+"\n\nUse /sync-roles to refresh your Chaster-derived roles. This dashboard is private to you.";
+  const title="**ChasterBot dashboard · "+guild.name+"**";
+  const account="**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy"):"Not linked · use /link-chaster");
+  const roles="**Your server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id)+"\n\nUse /sync-roles to refresh your Chaster-derived roles.";
+  const sessionText="**Your private sessions**\n"+(sessions.length?sessions.join("\n"):"No active private sessions found")+(invites.length?"\n\n**Pending invitations**\n"+invites.join("\n"):"\n\nNo pending invitations.");
+  const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured")+"\n\nManage with /configure-roles and /session-channel.";
+  let body;
+  if(tab==="roles")body=roles;
+  else if(tab==="sessions")body=sessionText;
+  else if(tab==="account")body=account+"\n\nUse /link-chaster to connect or reconnect, /chaster-link-status for connection diagnostics, and /unlink-chaster to remove the saved connection.";
+  else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
+  else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\n\nChoose a tab below to see details.";
+  return title+"\n\n"+body+"\n\n<text>Private to you · refreshed on demand</text>";
+}
+function buildDashboardComponents(userId,isAdmin,tab="overview"){
+  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"]];
+  if(isAdmin)tabs.push(["admin","Admin"]);
+  const nav=new ActionRowBuilder().addComponents(...tabs.map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary)));
+  const refresh=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashboard:refresh:"+tab+":"+userId).setLabel("Refresh").setStyle(ButtonStyle.Success));
+  return [nav,refresh];
 }
 export async function handleCommand(i){const n=i.commandName;
 if(n==="dashboard"){
 if(!i.guild)return i.reply({ephemeral:true,content:"Open the dashboard from a server."});
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-const content=await buildMemberDashboard(i.guild,i.user,admin);
-const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashboard:refresh").setLabel("Refresh dashboard").setStyle(ButtonStyle.Primary));
-return i.reply({ephemeral:true,content,components:[row]});
+const content=await buildMemberDashboard(i.guild,i.user,admin,"overview");
+return i.reply({ephemeral:true,content,components:buildDashboardComponents(i.user.id,admin,"overview")});
 }
 if(n==="lock-status"&&!await requireConfiguredRole(i,"wearer"))return;
 if((n==="keyholder-locks"||n==="time-change"||n==="keyholder-notes"||n==="keyholder-notes-delete")&&!await requireConfiguredRole(i,"keyholder"))return;
@@ -273,11 +284,17 @@ if(n==="keyholder-chat"){await i.deferReply();return i.editReply(await keyholder
 if(n==="audit"){const a=recentAudit(i.guildId,10);return i.reply({ephemeral:true,content:a.length?a.map(x=>"• <t:"+Math.floor(new Date(x.created_at+" UTC").getTime()/1000)+":R> <@"+x.actor_id+"> — "+x.action+": "+x.details).join("\n"):"No audit entries yet."});}
 }
 export async function handleButton(i){
-if(i.customId==="dashboard:refresh"){
+if(i.customId.startsWith("dashboard:")){
+const parts=i.customId.split(":");
+const action=parts[1],tab=action==="refresh"?parts[2]:action,userId=action==="refresh"?parts[3]:parts[2];
+if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
 if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-const content=await buildMemberDashboard(i.guild,i.user,admin);
-await i.update({content,components:i.message.components});
+const allowedTabs=["overview","roles","sessions","account","admin"];
+const selected=allowedTabs.includes(tab)?tab:"overview";
+if(selected==="admin"&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to view this tab."});return true;}
+const content=await buildMemberDashboard(i.guild,i.user,admin,selected);
+await i.update({content,components:buildDashboardComponents(i.user.id,admin,selected)});
 return true;
 }
 
