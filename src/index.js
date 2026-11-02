@@ -1,10 +1,8 @@
 import "dotenv/config";
-import crypto from "node:crypto";
 import {Client,Events,GatewayIntentBits} from "discord.js";
 import {handleCommand,handleButton} from "./commands.js";
 import {startOAuthServer} from "./oauth.js";
 import {startNotificationPolling} from "./notifications.js";
-globalThis.crypto=globalThis.crypto||crypto.webcrypto;
 if(!process.env.DISCORD_TOKEN)throw new Error("Missing DISCORD_TOKEN in .env");
 const client=new Client({intents:[GatewayIntentBits.Guilds]});
 client.once(Events.ClientReady,c=>{console.log("Logged in as "+c.user.tag);startOAuthServer(client);startNotificationPolling(client);});
