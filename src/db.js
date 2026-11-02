@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS session_invites(id TEXT PRIMARY KEY,guild_id TEXT NOT
 CREATE TABLE IF NOT EXISTS notification_admin_alerts(guild_id TEXT PRIMARY KEY,last_alert_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS notification_channel_pauses(guild_id TEXT PRIMARY KEY,channel_id TEXT NOT NULL,reason TEXT NOT NULL,paused_at INTEGER NOT NULL);
 `);
-for (const sql of ["ALTER TABLE guild_settings ADD COLUMN wearer_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN keyholder_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN session_channel_id TEXT"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes("duplicate column")) throw e; } }
+for (const sql of ["ALTER TABLE guild_settings ADD COLUMN wearer_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN keyholder_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN session_channel_id TEXT","ALTER TABLE guild_settings ADD COLUMN notification_retention_days INTEGER NOT NULL DEFAULT 30"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes("duplicate column")) throw e; } }
 export function ensureProfile(user){db.prepare("INSERT INTO profiles(discord_id,display_name) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET display_name=excluded.display_name").run(user.id,user.username);return db.prepare("SELECT * FROM profiles WHERE discord_id=?").get(user.id);}
 export function addPoints(id,name,points){db.prepare("INSERT OR IGNORE INTO profiles(discord_id,display_name) VALUES (?,?)").run(id,name);db.prepare("UPDATE profiles SET points=MAX(0,points+?) WHERE discord_id=?").run(points,id);}
 export function leaderboard(limit=10){return db.prepare("SELECT discord_id,display_name,points FROM profiles ORDER BY points DESC,display_name COLLATE NOCASE LIMIT ?").all(limit);}
@@ -85,9 +85,21 @@ export function getDiscordNotificationQueueStats(guildId){
   return rows.reduce((a,x)=>(a[x.status]=x.count,a),{pending:0,sent:0,failed:0});
 }
 
+export function getNotificationRetentionDays(guildId){
+  return db.prepare("SELECT notification_retention_days FROM guild_settings WHERE guild_id=?").get(String(guildId))?.notification_retention_days??30;
+}
+export function setNotificationRetentionDays(guildId,days,actorId){
+  const value=Number(days);
+  if(![7,30,90].includes(value))throw new RangeError("Notification retention must be 7, 30, or 90 days");
+  db.prepare("INSERT INTO guild_settings(guild_id,notification_retention_days) VALUES (?,?) ON CONFLICT(guild_id) DO UPDATE SET notification_retention_days=excluded.notification_retention_days,updated_at=CURRENT_TIMESTAMP").run(String(guildId),value);
+  audit(guildId,actorId,"notification_retention_updated",value+" days");
+  return value;
+}
 export function pruneDiscordNotificationQueue(now=Date.now()){
-  const sentBefore=now-30*86400000,failedBefore=now-90*86400000;
-  return db.prepare("DELETE FROM discord_notification_queue WHERE (status='sent' AND sent_at<?) OR (status='failed' AND created_at<?)").run(sentBefore,failedBefore).changes;
+  const defaultSentBefore=now-30*86400000,defaultFailedBefore=now-90*86400000;
+  const channelResult=db.prepare("DELETE FROM discord_notification_queue WHERE destination_type='channel' AND ((status='sent' AND sent_at<now-(COALESCE((SELECT notification_retention_days FROM guild_settings WHERE notification_channel_id=discord_notification_queue.target_id),30)*86400000)) OR (status='failed' AND created_at<now-(COALESCE((SELECT notification_retention_days FROM guild_settings WHERE notification_channel_id=discord_notification_queue.target_id),30)*86400000)))").run();
+  const userResult=db.prepare("DELETE FROM discord_notification_queue WHERE destination_type='user' AND ((status='sent' AND sent_at<?) OR (status='failed' AND created_at<?))").run(defaultSentBefore,defaultFailedBefore);
+  return channelResult.changes+userResult.changes;
 }
 
 export function getNotificationPreference(guildId,discordId){
