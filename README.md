@@ -19,7 +19,7 @@ Independent Discord companion for Chaster using the official Public API.
 - Profiles, points, leaderboards, community challenges and admin approval
 - Configurable text-only reward and optional consequence ideas
 - Dice game and optional AI-compatible keyholder persona
-- Notification-channel configuration, member notification pause/resume and status, privacy-preserving admin delivery-queue counts, and admin audit command
+- Notification-channel configuration, member notification pause/resume and status, privacy-preserving admin delivery-queue counts, failed-delivery review and retry, notification-channel health diagnostics, and admin audit command
 - Configurable Wearer/Keyholder role synchronization and role-gated commands
 - Mutual-consent private Discord session invitations using private threads
 
@@ -75,7 +75,7 @@ Official documentation:
 /chaster-calendar, /calendar-event-add, /calendar-event-edit, /calendar-event-delete, /chaster-calendar-stats, /chaster-settings, /permission-catalog, /chaster-lock-stats-config, /chaster-community-categories
 
 **Community and administration:**  
-/profile, /leaderboard, /notifications, /notification-status, /notification-queue-status, /notification-failures, /notification-retry, /notify-channel, /challenge, /challenge-join, /challenge-approve, /award-points, /reward-add, /punishment-add, /reward-list, /punishment-list, /dice, /keyholder-chat, /audit, /configure-roles, /sync-roles, /session-channel, /session-invite, /help
+/profile, /leaderboard, /notifications, /notification-status, /notification-queue-status, /notification-health, /notification-failures, /notification-retry, /notify-channel, /challenge, /challenge-join, /challenge-approve, /award-points, /reward-add, /punishment-add, /reward-list, /punishment-list, /dice, /keyholder-chat, /audit, /configure-roles, /sync-roles, /session-channel, /session-invite, /help
 
 ## Safety and limitations
 - The bot never asks for Chaster passwords; users link through OAuth.
