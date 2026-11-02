@@ -1,0 +1,4 @@
+import {createCipheriv,createDecipheriv,randomBytes} from "node:crypto";
+function key(){const s=process.env.CHASTER_TOKEN_ENCRYPTION_KEY||"";if(!/^[a-fA-F0-9]{64}$/.test(s))throw new Error("CHASTER_TOKEN_ENCRYPTION_KEY must be 64 hex characters.");return Buffer.from(s,"hex");}
+export function encryptJSON(v){const iv=randomBytes(12),c=createCipheriv("aes-256-gcm",key(),iv),data=Buffer.concat([c.update(JSON.stringify(v),"utf8"),c.final()]);return JSON.stringify({iv:iv.toString("base64"),tag:c.getAuthTag().toString("base64"),data:data.toString("base64")});}
+export function decryptJSON(s){const x=JSON.parse(s),d=createDecipheriv("aes-256-gcm",key(),Buffer.from(x.iv,"base64"));d.setAuthTag(Buffer.from(x.tag,"base64"));return JSON.parse(Buffer.concat([d.update(Buffer.from(x.data,"base64")),d.final()]).toString("utf8"));}
