@@ -94,6 +94,21 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const linkHealth=getChasterLinkHealth(user.id);
   const settings=getGuildRoleSettings(guild.id);
   const roleLabel=(roleId)=>{if(!roleId)return "Not configured";const role=guild.roles.cache.get(roleId);return role?role.name+" ("+(member.roles.cache.has(roleId)?"assigned":"not assigned")+")":"Configured role missing";};
+  let personalLocks=[],keyholderLocks=[],lockLoadError=null;
+  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account")){
+    try{
+      const token=await accessToken(user.id);
+      const [personalRaw,keyholderRaw]=await Promise.all([getMyLocks(token),getKeyholderLocks(token)]);
+      const asList=(raw,...keys)=>Array.isArray(raw)?raw:keys.map(key=>raw?.[key]).find(Array.isArray)||[];
+      personalLocks=asList(personalRaw,"locks","items","data").filter(lock=>!["ended","unlocked","expired","cancelled"].includes(String(lock.status||"").toLowerCase()));
+      keyholderLocks=asList(keyholderRaw,"locks","items","data").filter(lock=>!["ended","unlocked","expired","cancelled"].includes(String(lock.status||"").toLowerCase()));
+    }catch(error){
+      lockLoadError=error.code==="CHASTER_REAUTH_REQUIRED"?"Chaster requires you to reconnect with /link-chaster.":error.code==="CHASTER_RATE_LIMITED"?"Chaster is rate limiting requests. Try Refresh shortly.":"Live lock data is temporarily unavailable. Try Refresh shortly.";
+    }
+  }
+  const lockSection=(heading,locks)=>heading+"\\n"+(locks.length?locks.slice(0,5).map(lockLine).join("\\n"):"No active locks returned.");
+  const liveLocks=lockLoadError?"**Live lock data**\\n"+lockLoadError:
+    "**Live Chaster locks**\\n"+lockSection("**Wearer locks**",personalLocks)+"\\n\\n"+lockSection("**Keyholder locks**",keyholderLocks);
   const data=getMemberSessionDashboard(guild.id,user.id);
   const sessions=[];
   for(const session of data.sessions){
@@ -109,7 +124,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   let body;
   if(tab==="roles")body=roles;
   else if(tab==="sessions")body=sessionText;
-  else if(tab==="account")body=account+"\n\nUse /link-chaster to connect or reconnect, /chaster-link-status for connection diagnostics, and /unlink-chaster to remove the saved connection.";
+  else if(tab==="account")body=account+"\\n\\n"+liveLocks+"\\n\\nUse /link-chaster to connect or reconnect, /chaster-link-status for connection diagnostics, and /unlink-chaster to remove the saved connection.";
   else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
   else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\n\nChoose a tab below to see details.";
   return title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand";
