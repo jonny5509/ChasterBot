@@ -1,35 +1,60 @@
 # ChasterBot Enhanced
 
-Independent Discord companion for Chaster, using the official Chaster Public API.
+Independent Discord companion for Chaster using the official Public API.
 
-## Included in this starter
-- Discord slash-command foundation
-- SQLite profiles, points, challenges and audit history
-- Notification-channel configuration
-- Chaster API request adapter
-- Safe placeholders for OAuth, lock monitoring and keyholder actions
+## Implemented in this build
+- Discord slash commands and private Chaster account linking
+- OAuth 2 authorization-code exchange and refresh-token flow
+- AES-256-GCM encrypted OAuth token storage in SQLite
+- Personal lock status and keyholder lock listing
+- Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
+- Opt-in lock-change notifications via five-minute polling
+- Profiles, points, leaderboards, community challenges and admin approval
+- Configurable text-only reward and optional consequence ideas
+- Dice game and optional AI-compatible keyholder persona
+- Notification-channel configuration and admin audit command
+
+## Requirements
+- Node.js 20+
+- Discord application/bot
+- Chaster developer access and OAuth application
+- Public HTTPS host for production OAuth callback
 
 ## Setup
-1. Create a Discord application at https://discord.com/developers/applications
-2. Copy .env.example to .env and fill in the Discord values.
-3. Run npm install
-4. Run npm run register
-5. Run npm start
+1. Create a Discord application at https://discord.com/developers/applications.
+2. Apply for Chaster developer access: https://docs.chaster.app/api/basics/getting-started/
+3. Create a Chaster application after access is granted.
+4. Copy .env.example to .env and configure values.
+5. Generate encryption key: node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+6. Set CHASTER_REDIRECT_URI to your public HTTPS URL plus /oauth/chaster/callback. Register the exact same URL in Chaster.
+7. npm install && npm run register && npm start
 
-Use Node.js 20 or newer. Never commit .env or share bot tokens, OAuth secrets, access tokens or AI keys.
+Never commit .env or share Discord tokens, Chaster secrets, access/refresh tokens or AI API keys. Losing the encryption key makes saved OAuth tokens unreadable.
 
-## Chaster API
-Request developer access using https://docs.chaster.app/api/basics/getting-started/ and review https://api.chaster.app/api.
-For multi-user use, implement OAuth and request the minimum granular scopes. Start with profile, locks:read and keyholder:read. Add write scopes only after consent, keyholder checks and confirmation controls are tested.
+## OAuth scopes requested
+profile, locks:read, locks:write, keyholder:read, keyholder:write. Read/write scopes are distinct; Chaster users must approve them.
 
-## Safety
-- Never collect Chaster passwords; link accounts through OAuth.
-- Verify the acting Chaster account is the authorised keyholder for the exact lock.
-- Preview and confirm every lock-changing action.
-- Apply time bounds, cooldowns and idempotency checks.
-- Audit actor, target lock, action, amount and result; never log tokens.
-- AI can suggest actions but cannot execute lock changes.
-- Include wearer opt-out and emergency-help information.
+Official documentation:
+- https://docs.chaster.app/api/basics/getting-started/
+- https://docs.chaster.app/api/public-api/oauth-2/
+- https://docs.chaster.app/api/reference/scopes/
+- https://api.chaster.app/api
 
-## Status
-This is the first repository scaffold. OAuth callback handling, encrypted token storage, verified live lock data, webhook/event delivery and write actions are intentionally staged for subsequent commits. Chaster's API is beta; confirm endpoint schemas and granted scopes against the current API reference before enabling production operations.
+## Commands
+/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change
+/notifications, /notify-channel, /profile, /leaderboard, /award-points
+/challenge, /challenge-join, /challenge-approve
+/reward-add, /punishment-add, /reward-list, /punishment-list
+/dice, /keyholder-chat, /audit, /help
+
+## Safety and limitations
+- The bot never asks for Chaster passwords; users link through OAuth.
+- AI cannot call lock APIs. Time changes require a linked keyholder, a matching lock in Chaster's keyholder-lock search, and a separate explicit confirmation.
+- Time changes are limited to 24 hours per command. Chaster remains authoritative and may reject a request.
+- Notifications are opt-in and polled every five minutes; they are not instantaneous webhooks.
+- Reward/consequence items are suggestions only; keep them consensual, optional, non-physical and non-financial.
+- AI is optional; without provider settings, the bot uses a scripted fallback.
+- Chaster's API is beta. Test with a Chaster test lock and confirm current endpoint schemas before production.
+
+## Production checklist
+Use HTTPS, a persistent host and secret manager; lock down database permissions; encrypt backups; configure least-privilege Discord roles/channels; monitor API rate limits; never log credentials.
