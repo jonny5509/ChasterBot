@@ -4,7 +4,7 @@ import {saveOAuthState,consumeOAuthState,saveLinkedAccount,getLinkedAccount} fro
 import {encryptJSON,decryptJSON} from "./crypto.js";
 const AUTH="https://sso.chaster.app/auth/realms/app/protocol/openid-connect/auth";
 const TOKEN="https://sso.chaster.app/auth/realms/app/protocol/openid-connect/token";
-const SCOPES=["profile","locks:read","locks:write","keyholder:read","keyholder:write"];
+const SCOPES=["profile","profile:read","locks:read","locks:write","shared_locks:read","keyholder:read","keyholder:write","messaging:read","notifications:read","calendar:read"];
 function cfg(){const c={id:process.env.CHASTER_CLIENT_ID,secret:process.env.CHASTER_CLIENT_SECRET,redirect:process.env.CHASTER_REDIRECT_URI};if(!c.id||!c.secret||!c.redirect)throw new Error("Set Chaster OAuth client ID, secret and public redirect URI.");return c;}
 export function createAuthorizationUrl(discordId){const c=cfg(),state=randomBytes(32).toString("hex");saveOAuthState(state,discordId,Date.now()+600000);const u=new URL(AUTH);u.search=new URLSearchParams({client_id:c.id,redirect_uri:c.redirect,response_type:"code",scope:SCOPES.join(" "),state}).toString();return u.toString();}
 async function tokenRequest(params){const c=cfg(),body=new URLSearchParams({client_id:c.id,client_secret:c.secret,...params});const r=await fetch(TOKEN,{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});if(!r.ok)throw new Error("Chaster OAuth exchange failed ("+r.status+").");return r.json();}
