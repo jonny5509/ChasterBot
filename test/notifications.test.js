@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,createSessionInvite,deleteSessionInvite,deletePrivateSession,recordPrivateSession,setGuildRoles,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,createSessionInvite,consumeSessionInvite,deleteSessionInvite,deletePrivateSession,recordPrivateSession,setGuildRoles,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -226,4 +226,19 @@ test("private sessions can only be removed by a participant in the same server",
   assert.equal(deletePrivateSession(guild,thread,outsider),false);
   assert.equal(deletePrivateSession(guild,thread,keyholder),true);
   assert.equal(deletePrivateSession(guild,thread,wearer),false);
+});
+
+
+test("only the intended invitee can consume a pending session invitation",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="session-accept-guild-"+suffix;
+  const inviter="session-accept-inviter-"+suffix;
+  const invitee="session-accept-invitee-"+suffix;
+  const outsider="session-accept-outsider-"+suffix;
+  const inviteId="session-accept-invite-"+suffix;
+  createSessionInvite(inviteId,guild,"channel",inviter,invitee,Date.now()+600000);
+  assert.equal(consumeSessionInvite(inviteId,outsider),null);
+  const accepted=consumeSessionInvite(inviteId,invitee);
+  assert.equal(accepted.invitee_id,invitee);
+  assert.equal(consumeSessionInvite(inviteId,invitee),null);
 });
