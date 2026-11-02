@@ -110,8 +110,8 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const lockSection=(heading,locks)=>heading+"\n"+(locks.length?locks.slice(0,3).map(lockLine).join("\n"):"No active locks returned.");
   const liveLocks=lockLoadError?"**Live lock data**\n"+lockLoadError:
     "**Live Chaster locks**\n"+lockSection("**Wearer locks**",personalLocks)+"\n\n"+lockSection("**Keyholder locks**",keyholderLocks);
-  let calendarEvents=[],notificationCounts=null,extraLoadError=null;
-  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="calendar"||tab==="notifications")){
+  let calendarEvents=[],notificationCounts=null,conversations=[],extraLoadError=null;
+  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="calendar"||tab==="notifications"||tab==="conversations")){
     try{
       const token=await accessToken(user.id);
       if(tab==="calendar"){const raw=await getCalendarEvents(token);calendarEvents=Array.isArray(raw)?raw:(raw?.items||raw?.events||raw?.data||[]);}
@@ -144,6 +144,9 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
   else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
   else if(tab==="keyholder")body=lockLoadError?"**Keyholder tools**\n"+lockLoadError:keyholderLocks.length?"**Keyholder tools**\n"+lockSection("**Locks you keyhold**",keyholderLocks)+"\n\nUse the buttons below to view or delete private notes, or propose a time change. Every operation rechecks your configured Keyholder role and Chaster lock ownership.":"**Keyholder tools**\nNo keyheld locks were found, or your Chaster account is not connected. You need the configured Keyholder role and a trusted Chaster keyholder lock to use these actions.";
+  else if(tab==="conversations"){
+    body="**Your Chaster conversations**\\n"+(extraLoadError?extraLoadError:conversations.length?conversations.slice(0,12).map(c=>"• **"+String(c.title||c.name||c.user?.username||c.participant?.username||"Conversation").slice(0,55)+"** · ID: "+String(c._id||c.id||"unknown")).join("\\n"):"No conversations returned.")+"\\n\\nUse Open conversation and enter an ID above to read its messages. This dashboard is read-only; it cannot send messages.";
+  }
   else if(tab==="notifications"){
     const enabled=getNotificationPreference(guild.id,user.id);
     const channelId=getNotificationChannel(guild.id);
@@ -158,7 +161,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["commands","Commands"]];
+  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["conversations","Messages"],["commands","Commands"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const rows=[];
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
@@ -180,6 +183,9 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary)
     ];
     rows.push(new ActionRowBuilder().addComponents(...actions));
+  }
+  if(tab==="conversations"){
+    rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashconversation:open:"+userId).setLabel("Open conversation").setStyle(ButtonStyle.Primary)));
   }
   if(tab==="notifications"){
     const enabled=getNotificationPreference(guild.id,userId);
@@ -463,6 +469,13 @@ const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
 return true;
 }
+if(i.customId.startsWith("dashconversation:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashconversation-submit:"+userId).setTitle("Read Chaster conversation");
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("conversation_id").setLabel("Conversation ID from your list").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+  await i.showModal(modal);return true;
+}
 if(i.customId.startsWith("dashnotify:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -564,6 +577,23 @@ return true;
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
 
 export async function handleModal(i){
+  if(i.customId.startsWith("dashconversation-submit:")){
+    const [,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    const conversationId=i.fields.getTextInputValue("conversation_id").trim();
+    if(!conversationId||conversationId.length>100){await i.reply({ephemeral:true,content:"Enter a valid conversation ID."});return true;}
+    await i.deferReply({ephemeral:true});
+    try{
+      const token=await accessToken(i.user.id);
+      const raw=await getConversations(token);
+      const own=Array.isArray(raw)?raw:(raw?.items||raw?.conversations||raw?.data||[]);
+      if(!own.some(c=>String(c._id||c.id)===conversationId))throw new Error("That conversation is not in your Chaster conversation list. No message request was made.");
+      const [details,messages]=await Promise.all([getConversation(conversationId,token),getConversationMessages(conversationId,token)]);
+      const format=value=>JSON.stringify(value,null,2)||"No data returned.";
+      await i.editReply("**Conversation details**\\n"+format(details).slice(0,700)+"\\n\\n**Messages (read-only)**\\n"+format(messages).slice(0,950));
+    }catch(error){await i.editReply("Could not load this conversation: "+error.message);}
+    return true;
+  }
   if(i.customId.startsWith("dashcalendar-submit:")){
     const [,action,userId]=i.customId.split(":");
     if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
