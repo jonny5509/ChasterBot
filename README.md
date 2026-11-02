@@ -6,7 +6,7 @@ Independent Discord companion for Chaster using the official Public API.
 - Discord slash commands and private Chaster account linking
 - OAuth 2 authorization-code exchange and refresh-token flow
 - AES-256-GCM encrypted OAuth token storage in SQLite
-- Personal lock status and keyholder lock listing
+- Personal lock status, keyholder lock listing and Chaster profile\n- Read-only shared lock, private conversation, calendar and notification-count views
 - Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
 - Opt-in lock-change notifications via five-minute polling
 - Profiles, points, leaderboards, community challenges and admin approval
@@ -32,7 +32,7 @@ Independent Discord companion for Chaster using the official Public API.
 Never commit .env or share Discord tokens, Chaster secrets, access/refresh tokens or AI API keys. Losing the encryption key makes saved OAuth tokens unreadable.
 
 ## OAuth scopes requested
-profile, locks:read, locks:write, keyholder:read, keyholder:write. Read/write scopes are distinct; Chaster users must approve them.
+profile, profile:read, locks:read, locks:write, shared_locks:read, keyholder:read, keyholder:write, messaging:read, notifications:read, calendar:read. The new read scopes enable Chaster profile, shared-lock, conversation, notification-count and calendar commands. Users must relink and approve the updated consent request.
 
 Official documentation:
 - https://docs.chaster.app/api/basics/getting-started/
@@ -41,7 +41,7 @@ Official documentation:
 - https://api.chaster.app/api
 
 ## Commands
-/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change
+/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change\n/chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications
 /notifications, /notify-channel, /profile, /leaderboard, /award-points
 /challenge, /challenge-join, /challenge-approve
 /reward-add, /punishment-add, /reward-list, /punishment-list
