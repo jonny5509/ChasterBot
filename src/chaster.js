@@ -3,4 +3,8 @@ export async function chasterRequest(path,options={}){if(!options.token)throw ne
 export function getMyLocks(token){return chasterRequest("/locks",{token});}
 export function getKeyholderLocks(token){return chasterRequest("/keyholder/locks/search",{token,method:"POST",body:{status:"locked",page:0,limit:50}});}
 export function getCurrentProfile(token){return chasterRequest("/auth/profile",{token});}
+export function getSharedLocks(token){return chasterRequest("/shared-locks",{token});}
+export function getConversations(token){return chasterRequest("/conversations",{token});}
+export function getCalendarEvents(token){return chasterRequest("/calendar/events",{token});}
+export function getNotificationCounts(token){return chasterRequest("/notifications/counts",{token});}
 export function updateLockTime(lockId,duration,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/update-time",{token,method:"POST",body:{duration}});}
