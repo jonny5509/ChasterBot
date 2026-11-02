@@ -24,6 +24,8 @@ export function getKeyholderApplications(lockId,token){return chasterRequest("/l
 export function getConversation(conversationId,token){return chasterRequest("/conversations/"+encodeURIComponent(conversationId),{token});}
 export function getConversationMessages(conversationId,token){return chasterRequest("/conversations/"+encodeURIComponent(conversationId)+"/messages",{token});}
 export function getSharedLockFavorite(sharedLockId,token){return chasterRequest("/shared-locks/"+encodeURIComponent(sharedLockId)+"/favorite",{token});}
+export function addSharedLockFavorite(sharedLockId,token){return chasterRequest("/shared-locks/"+encodeURIComponent(sharedLockId)+"/favorite",{token,method:"PUT"});}
+export function removeSharedLockFavorite(sharedLockId,token){return chasterRequest("/shared-locks/"+encodeURIComponent(sharedLockId)+"/favorite",{token,method:"DELETE"});}
 export function getNotificationChannelHealth(token){return chasterRequest("/notifications/channels/health",{token});}
 export function markNotificationRead(notificationId,token){return chasterRequest("/notifications/"+encodeURIComponent(notificationId)+"/read",{token,method:"POST"});}
 export function markAllNotificationsRead(token){return chasterRequest("/notifications/read-all",{token,method:"POST"});}
@@ -38,9 +40,7 @@ export function getAchievementCategories(token){return chasterRequest("/achievem
 export function getIgnoredUsers(token){return chasterRequest("/messaging/ignored-users",{token});}
 export function getLockStatsResetConfig(token){return chasterRequest("/lock-stats/reset-config",{token});}
 export function getCommunityEventCategories(token){return chasterRequest("/community-event/categories",{token});}
-export function getApiHealth(token){return chasterRequest("/health",{token});}
 export function getPublicLocks(userId,token){return chasterRequest("/locks/user/"+encodeURIComponent(userId),{token});}
-export function getProfileCompleteness(token){return chasterRequest("/users/profile-completeness",{token});}
 export function createCalendarEvent(data,token){return chasterRequest("/calendar/events",{token,method:"POST",body:data});}
 export function updateCalendarEvent(eventId,data,token){return chasterRequest("/calendar/events/"+encodeURIComponent(eventId),{token,method:"PATCH",body:data});}
 export function deleteCalendarEvent(eventId,token){return chasterRequest("/calendar/events/"+encodeURIComponent(eventId),{token,method:"DELETE"});}
