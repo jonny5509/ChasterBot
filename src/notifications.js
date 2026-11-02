@@ -39,7 +39,6 @@ async function alertGuildOwnerOfNotificationFailure(client,item,error){
     if(!guildId)return false;
     const guild=client.guilds.cache.get(guildId)||await client.guilds.fetch(guildId);
     if(!guild?.ownerId||!claimNotificationAdminAlert(guildId))return false;
-    const user=await client.users.fetch(guild.ownerId);
     return enqueueDiscordNotification({
       dedupeKey:"notification-admin-alert:"+guildId+":"+randomUUID(),
       destinationType:"user",
