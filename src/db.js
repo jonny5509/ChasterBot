@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY,discord_id TEXT N
 CREATE TABLE IF NOT EXISTS notification_optins(guild_id TEXT NOT NULL,discord_id TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(guild_id,discord_id));
 CREATE TABLE IF NOT EXISTS lock_snapshots(discord_id TEXT NOT NULL,lock_id TEXT NOT NULL,fingerprint TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(discord_id,lock_id));
 CREATE TABLE IF NOT EXISTS reward_items(id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('reward','punishment')),title TEXT NOT NULL,description TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS session_invites(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,channel_id TEXT NOT NULL,inviter_id TEXT NOT NULL,invitee_id TEXT NOT NULL,expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS session_invites(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,channel_id TEXT NOT NULL,inviter_id TEXT NOT NULL,invitee_id TEXT NOT NULL,expires_at INTEGER NOT NULL);\nCREATE TABLE IF NOT EXISTS discord_notification_queue(id INTEGER PRIMARY KEY AUTOINCREMENT,dedupe_key TEXT NOT NULL UNIQUE,destination_type TEXT NOT NULL CHECK(destination_type IN ('user','channel')),target_id TEXT NOT NULL,content TEXT NOT NULL,allowed_mentions TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sent','failed')),attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,sent_at INTEGER);\nCREATE INDEX IF NOT EXISTS idx_notification_queue_due ON discord_notification_queue(status,next_attempt_at,id);
 `);
 for (const sql of ["ALTER TABLE guild_settings ADD COLUMN wearer_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN keyholder_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN session_channel_id TEXT"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes("duplicate column")) throw e; } }
 export function ensureProfile(user){db.prepare("INSERT INTO profiles(discord_id,display_name) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET display_name=excluded.display_name").run(user.id,user.username);return db.prepare("SELECT * FROM profiles WHERE discord_id=?").get(user.id);}
@@ -57,3 +57,24 @@ export function markChasterLinkNeedsReauth(id,reason="authorization rejected"){
 }
 export function clearChasterLinkHealth(id){db.prepare("DELETE FROM chaster_link_health WHERE discord_id=?").run(id);}
 export function getChasterLinkHealth(id){return db.prepare("SELECT status,reason,updated_at FROM chaster_link_health WHERE discord_id=?").get(id)??null;}
+
+export function enqueueDiscordNotification({dedupeKey,destinationType,targetId,content,allowedMentions={}}){
+  if(!dedupeKey||!["user","channel"].includes(destinationType)||!targetId||!content)return false;
+  const r=db.prepare("INSERT OR IGNORE INTO discord_notification_queue(dedupe_key,destination_type,target_id,content,allowed_mentions,created_at) VALUES (?,?,?,?,?,?)").run(String(dedupeKey),destinationType,String(targetId),String(content).slice(0,2000),JSON.stringify(allowedMentions),Date.now());
+  return r.changes===1;
+}
+export function getDueDiscordNotifications(limit=20,now=Date.now()){
+  return db.prepare("SELECT * FROM discord_notification_queue WHERE status='pending' AND next_attempt_at<=? ORDER BY id LIMIT ?").all(now,Math.max(1,Math.min(100,limit)));
+}
+export function markDiscordNotificationSent(id){
+  db.prepare("UPDATE discord_notification_queue SET status='sent',sent_at=?,last_error='' WHERE id=? AND status='pending'").run(Date.now(),id);
+}
+export function markDiscordNotificationFailed(id,error,{retryAt=null,maxAttempts=5}={}){
+  const row=db.prepare("SELECT attempts FROM discord_notification_queue WHERE id=? AND status='pending'").get(id);
+  if(!row)return;
+  const attempts=row.attempts+1,failed=retryAt===null||attempts>=maxAttempts;
+  db.prepare("UPDATE discord_notification_queue SET attempts=?,status=?,next_attempt_at=?,last_error=? WHERE id=? AND status='pending'").run(attempts,failed?'failed':'pending',retryAt??0,String(error||"Delivery failed").slice(0,500),id);
+}
+export function getDiscordNotificationQueueStats(){
+  return db.prepare("SELECT status,COUNT(*) AS count FROM discord_notification_queue GROUP BY status").all().reduce((a,x)=>(a[x.status]=x.count,a),{pending:0,sent:0,failed:0});
+}
