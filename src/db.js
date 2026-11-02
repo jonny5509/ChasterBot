@@ -111,6 +111,22 @@ export function getNotificationChannel(guildId){
 }
 
 
+export function getDiscordNotificationDeliveryReport(guildId,days=7,now=Date.now()){
+  const period=Number(days);
+  if(![7,30,90].includes(period))throw new RangeError("Report period must be 7, 30, or 90 days");
+  const rows=db.prepare("SELECT q.status,COUNT(*) AS count,AVG(q.attempts) AS average_attempts FROM discord_notification_queue q JOIN guild_settings g ON g.notification_channel_id=q.target_id WHERE q.destination_type='channel' AND g.guild_id=? AND q.created_at>=? AND q.created_at<=? GROUP BY q.status").all(String(guildId),now-period*86400000,now);
+  const report={days:period,sent:0,failed:0,pending:0,averageAttempts:0};
+  let completed=0,attempts=0;
+  for(const row of rows){
+    report[row.status]=row.count;
+    if(row.status==="sent"||row.status==="failed"){completed+=row.count;attempts+=(row.average_attempts||0)*row.count;}
+  }
+  report.completed=completed;
+  report.successRate=completed?Math.round(report.sent/completed*100):null;
+  report.averageAttempts=completed?Math.round(attempts/completed*100)/100:0;
+  return report;
+}
+
 export function getDiscordNotificationHistory(guildId,limit=10){
   return db.prepare("SELECT q.id,q.status,q.attempts,q.created_at,q.sent_at,q.last_error FROM discord_notification_queue q JOIN guild_settings g ON g.notification_channel_id=q.target_id WHERE q.destination_type='channel' AND g.guild_id=? ORDER BY q.id DESC LIMIT ?").all(String(guildId),Math.max(1,Math.min(20,limit)));
 }
