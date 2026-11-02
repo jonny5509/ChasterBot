@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY,discord_id TEXT N
 CREATE TABLE IF NOT EXISTS notification_optins(guild_id TEXT NOT NULL,discord_id TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(guild_id,discord_id));
 CREATE TABLE IF NOT EXISTS lock_snapshots(discord_id TEXT NOT NULL,lock_id TEXT NOT NULL,fingerprint TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(discord_id,lock_id));
 CREATE TABLE IF NOT EXISTS reward_items(id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('reward','punishment')),title TEXT NOT NULL,description TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS session_invites(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,channel_id TEXT NOT NULL,inviter_id TEXT NOT NULL,invitee_id TEXT NOT NULL,expires_at INTEGER NOT NULL);
 `);
+for (const sql of ["ALTER TABLE guild_settings ADD COLUMN wearer_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN keyholder_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN session_channel_id TEXT"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes("duplicate column")) throw e; } }
 export function ensureProfile(user){db.prepare("INSERT INTO profiles(discord_id,display_name) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET display_name=excluded.display_name").run(user.id,user.username);return db.prepare("SELECT * FROM profiles WHERE discord_id=?").get(user.id);}
 export function addPoints(id,name,points){db.prepare("INSERT OR IGNORE INTO profiles(discord_id,display_name) VALUES (?,?)").run(id,name);db.prepare("UPDATE profiles SET points=MAX(0,points+?) WHERE discord_id=?").run(points,id);}
 export function leaderboard(limit=10){return db.prepare("SELECT discord_id,display_name,points FROM profiles ORDER BY points DESC,display_name COLLATE NOCASE LIMIT ?").all(limit);}
@@ -38,3 +40,10 @@ export function getLockSnapshot(u,l){return db.prepare("SELECT fingerprint FROM 
 export function setLockSnapshot(u,l,f){db.prepare("INSERT INTO lock_snapshots(discord_id,lock_id,fingerprint) VALUES (?,?,?) ON CONFLICT(discord_id,lock_id) DO UPDATE SET fingerprint=excluded.fingerprint,updated_at=CURRENT_TIMESTAMP").run(u,l,f);}
 export function audit(g,u,a,d=""){db.prepare("INSERT INTO audit_logs(guild_id,actor_id,action,details) VALUES (?,?,?,?)").run(g??null,u,a,String(d).slice(0,1000));}
 export function recentAudit(g,l=10){return db.prepare("SELECT actor_id,action,details,created_at FROM audit_logs WHERE guild_id=? ORDER BY id DESC LIMIT ?").all(g,l);}
+
+export function setGuildRoles(g,w,k,a){db.prepare("INSERT INTO guild_settings(guild_id,wearer_role_id,keyholder_role_id) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET wearer_role_id=excluded.wearer_role_id,keyholder_role_id=excluded.keyholder_role_id,updated_at=CURRENT_TIMESTAMP").run(g,w??null,k??null);audit(g,a,"role_configured","wearer="+(w||"none")+", keyholder="+(k||"none"));}
+export function getRoleSettings(){return db.prepare("SELECT guild_id,wearer_role_id,keyholder_role_id FROM guild_settings WHERE wearer_role_id IS NOT NULL OR keyholder_role_id IS NOT NULL").all();}
+export function setSessionChannel(g,c,a){db.prepare("INSERT INTO guild_settings(guild_id,session_channel_id) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET session_channel_id=excluded.session_channel_id,updated_at=CURRENT_TIMESTAMP").run(g,c);audit(g,a,"session_channel_configured",c);}
+export function getSessionChannel(g){return db.prepare("SELECT session_channel_id FROM guild_settings WHERE guild_id=?").get(g)?.session_channel_id??null;}
+export function createSessionInvite(id,g,c,from,to,expires){db.prepare("INSERT INTO session_invites(id,guild_id,channel_id,inviter_id,invitee_id,expires_at) VALUES (?,?,?,?,?,?)").run(id,g,c,from,to,expires);}
+export function consumeSessionInvite(id){const x=db.prepare("SELECT * FROM session_invites WHERE id=?").get(id);db.prepare("DELETE FROM session_invites WHERE id=?").run(id);return x&&x.expires_at>Date.now()?x:null;}
