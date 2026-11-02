@@ -181,6 +181,19 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     ];
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
+  if(tab==="notifications"){
+    const enabled=getNotificationPreference(guild.id,userId);
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashnotify:toggle:"+userId).setLabel(enabled?"Pause server updates":"Resume server updates").setStyle(enabled?ButtonStyle.Secondary:ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("dashnotify:read-all:"+userId).setLabel("Mark Chaster notifications read").setStyle(ButtonStyle.Primary)
+    ));
+  }
+  if(tab==="calendar"){
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashcalendar:add:"+userId).setLabel("Create calendar event").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("dashcalendar:delete:"+userId).setLabel("Delete calendar event").setStyle(ButtonStyle.Danger)
+    ));
+  }
   if(tab==="sessions"){
     const data=getMemberSessionDashboard(guild.id,userId);
     const actions=[new ButtonBuilder().setCustomId("dashsessioninvite:"+userId).setLabel("Invite member").setStyle(ButtonStyle.Success)];
@@ -450,6 +463,37 @@ const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
 return true;
 }
+if(i.customId.startsWith("dashnotify:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  if(!i.guildId){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+  if(action==="toggle"){
+    const enabled=!getNotificationPreference(i.guildId,i.user.id);
+    setNotificationOptIn(i.guildId,i.user.id,enabled);
+    const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+    const content=await buildMemberDashboard(i.guild,i.user,admin,"notifications");
+    await i.update({content,components:buildDashboardComponents(i.guild,i.user.id,admin,"notifications")});
+    return true;
+  }
+  if(action==="read-all"){
+    await i.deferReply({ephemeral:true});
+    try{const token=await accessToken(i.user.id);await markAllNotificationsRead(token);await i.editReply("Chaster accepted the mark-all-as-read request.");}
+    catch(error){await i.editReply("Could not mark Chaster notifications as read: "+error.message);}
+    return true;
+  }
+}
+if(i.customId.startsWith("dashcalendar:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashcalendar-submit:"+action+":"+userId).setTitle(action==="add"?"Create calendar event":"Delete calendar event");
+  const fields=[];
+  if(action==="add"){
+    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("start").setLabel("Start date/time (ISO 8601)").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(40).setPlaceholder("2026-11-05T18:00:00Z")));
+    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("end").setLabel("End date/time (optional ISO 8601)").setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(40)));
+    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("description").setLabel("Description (optional)").setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)));
+  }else fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("event_id").setLabel("Calendar event ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+  modal.addComponents(...fields);await i.showModal(modal);return true;
+}
 if(i.customId.startsWith("dashkeyholder:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -476,7 +520,7 @@ const action=parts[1],tab=action==="refresh"?parts[2]:action,userId=action==="re
 if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
 if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-const allowedTabs=["overview","roles","sessions","account","keyholder","commands","admin"];
+const allowedTabs=["overview","roles","sessions","account","keyholder","notifications","calendar","commands","admin"];
 const selected=allowedTabs.includes(tab)?tab:"overview";
 if(selected==="admin"&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to view this tab."});return true;}
 const content=await buildMemberDashboard(i.guild,i.user,admin,selected);
