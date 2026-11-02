@@ -36,7 +36,7 @@ export function consumeOAuthState(s){const r=db.prepare("SELECT discord_id,expir
 export function saveLinkedAccount(u,c,n,t,s,e){db.prepare("INSERT INTO linked_accounts(discord_id,chaster_user_id,username,encrypted_tokens,scopes,expires_at) VALUES (?,?,?,?,?,?) ON CONFLICT(discord_id) DO UPDATE SET chaster_user_id=excluded.chaster_user_id,username=excluded.username,encrypted_tokens=excluded.encrypted_tokens,scopes=excluded.scopes,expires_at=excluded.expires_at,linked_at=CURRENT_TIMESTAMP").run(u,c,n??null,t,s??"",e);}
 export function getLinkedAccount(u){return db.prepare("SELECT * FROM linked_accounts WHERE discord_id=?").get(u)??null;}
 export function getAllLinkedAccounts(){return db.prepare("SELECT * FROM linked_accounts").all();}
-export function deleteLinkedAccount(u){db.prepare("DELETE FROM linked_accounts WHERE discord_id=?").run(u);db.prepare("DELETE FROM lock_snapshots WHERE discord_id=?").run(u);}
+export function deleteLinkedAccount(u){db.prepare("DELETE FROM linked_accounts WHERE discord_id=?").run(u);db.prepare("DELETE FROM lock_snapshots WHERE discord_id=?").run(u);db.prepare("DELETE FROM chaster_link_health WHERE discord_id=?").run(u);}
 export function getLockSnapshot(u,l){return db.prepare("SELECT fingerprint FROM lock_snapshots WHERE discord_id=? AND lock_id=?").get(u,l)?.fingerprint??null;}
 export function setLockSnapshot(u,l,f){db.prepare("INSERT INTO lock_snapshots(discord_id,lock_id,fingerprint) VALUES (?,?,?) ON CONFLICT(discord_id,lock_id) DO UPDATE SET fingerprint=excluded.fingerprint,updated_at=CURRENT_TIMESTAMP").run(u,l,f);}
 export function audit(g,u,a,d=""){db.prepare("INSERT INTO audit_logs(guild_id,actor_id,action,details) VALUES (?,?,?,?)").run(g??null,u,a,String(d).slice(0,1000));}
