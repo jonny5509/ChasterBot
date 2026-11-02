@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -80,4 +80,21 @@ test("notification failure alerts resolve the owning server and enforce a six-ho
   assert.equal(claimNotificationAdminAlert(guild,now+60*60*1000),false);
   assert.equal(claimNotificationAdminAlert(guild,now+6*60*60*1000),true);
   assert.equal(claimNotificationAdminAlert(guild+"-other",now+6*60*60*1000),true);
+});
+
+
+test("terminal channel failures can pause delivery until an administrator reconfigures the channel",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="notification-pause-guild-"+suffix;
+  const channel="notification-pause-channel-"+suffix;
+  const replacement="notification-pause-replacement-"+suffix;
+  setNotificationChannel(guild,channel,"test-admin");
+  assert.equal(isNotificationChannelPaused(guild,channel),false);
+  pauseNotificationChannel(guild,channel,"the bot lacks channel permissions");
+  assert.equal(isNotificationChannelPaused(guild,channel),true);
+  assert.equal(getNotificationChannelPause(guild).reason,"the bot lacks channel permissions");
+  assert.equal(isNotificationChannelPaused(guild,replacement),false);
+  setNotificationChannel(guild,replacement,"test-admin");
+  assert.equal(getNotificationChannelPause(guild),null);
+  assert.equal(isNotificationChannelPaused(guild,replacement),false);
 });
