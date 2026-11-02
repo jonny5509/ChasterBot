@@ -88,8 +88,10 @@ export function startDiscordNotificationWorker(client){
   const run=()=>processPendingDiscordNotifications(client).catch(e=>console.warn("Notification queue worker failed:",e.message));
   run();
   const timer=setInterval(run,10000);
+  const retentionTimer=setInterval(()=>{try{pruneDiscordNotificationQueue();}catch(e){console.warn("Notification history cleanup failed:",e?.message||"unknown error");}},24*60*60*1000);
   timer.unref?.();
-  return ()=>clearInterval(timer);
+  retentionTimer.unref?.();
+  return ()=>{clearInterval(timer);clearInterval(retentionTimer);};
 }
 
 export function startNotificationPolling(client){
