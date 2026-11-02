@@ -1,5 +1,5 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType} from "discord.js";
-import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays} from "./db.js";
+import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
@@ -10,6 +10,7 @@ import {isOwnedResourceListed} from "./owned-resources.js";
 const pending=new Map();
 export const commands=[
 new SlashCommandBuilder().setName("help").setDescription("Show bot commands."),
+new SlashCommandBuilder().setName("dashboard").setDescription("Open your ChasterBot roles and private session dashboard."),
 new SlashCommandBuilder().setName("link-chaster").setDescription("Securely link your Chaster account."),
 new SlashCommandBuilder().setName("chaster-link-status").setDescription("Check your Chaster connection health."),
 new SlashCommandBuilder().setName("unlink-chaster").setDescription("Remove your saved Chaster connection."),
@@ -87,7 +88,34 @@ new SlashCommandBuilder().setName("session-invite").setDescription("Invite anoth
 function lockLine(l){const title=String(l.title||"Untitled lock").slice(0,70);let t="time hidden/unavailable";if(l.isAllowedToViewTime!==false&&l.endDate){const s=Math.max(0,Math.floor((new Date(l.endDate).getTime()-Date.now())/1000));t=Math.floor(s/86400)+"d "+Math.floor(s%86400/3600)+"h "+Math.floor(s%3600/60)+"m";}return "• **"+title+"** — "+String(l.status||"unknown")+(l.isFrozen?" · frozen":"")+" · "+t+" · ID: `"+(l._id||l.id)+"`";}
 async function accessToken(id){if(!getLinkedAccount(id))throw new Error("Link your Chaster account first with /link-chaster.");const t=await getTokensForDiscordUser(id);if(!t?.access_token)throw new Error("Chaster session expired. Run /link-chaster again.");return t.access_token;}
 async function requireConfiguredRole(i,kind){if(!i.guildId)return false;const settings=getRoleSettings().find(x=>x.guild_id===i.guildId);const roleId=kind==="wearer"?settings?.wearer_role_id:settings?.keyholder_role_id;if(!roleId){await i.reply({ephemeral:true,content:"This server has not configured the "+kind+" role yet. An admin must run /configure-roles first."});return false;}const member=i.member?.roles?.cache?i.member:await i.guild.members.fetch(i.user.id);if(!member.roles.cache.has(roleId)){await i.reply({ephemeral:true,content:"This command is available to members with the configured **"+(kind==="wearer"?"Wearer":"Keyholder")+"** role. Your role is updated automatically from Chaster; try /sync-roles if it is missing."});return false;}return true;}
+async function buildMemberDashboard(guild,user,isAdmin=false){
+  const member=await guild.members.fetch(user.id);
+  const linked=Boolean(getLinkedAccount(user.id));
+  const linkHealth=getChasterLinkHealth(user.id);
+  const settings=getGuildRoleSettings(guild.id);
+  const roleLabel=(roleId)=>{if(!roleId)return "Not configured";const role=guild.roles.cache.get(roleId);return role?role.name+" ("+(member.roles.cache.has(roleId)?"assigned":"not assigned")+")":"Configured role missing";};
+  const data=getMemberSessionDashboard(guild.id,user.id);
+  const sessions=[];
+  for(const session of data.sessions){
+    const thread=await guild.channels.fetch(session.thread_id).catch(()=>null);
+    if(thread&&!thread.archived)sessions.push("<#"+session.thread_id+"> · <@"+(session.inviter_id===user.id?session.invitee_id:session.inviter_id)+">");
+  }
+  const invites=data.invites.map(inv=>inv.invitee_id===user.id?"Incoming invitation from <@"+inv.inviter_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>":"Invitation sent to <@"+inv.invitee_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>");
+  const lines=[
+    "**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy"):"Not linked · use /link-chaster"),
+    "**Server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id),
+    "**Private sessions**\n"+(sessions.length?sessions.join("\n"):"No active private sessions found")+(invites.length?"\n"+invites.join("\n"):"")
+  ];
+  if(isAdmin)lines.push("**Server setup**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured"));
+  return "**ChasterBot dashboard · "+guild.name+"**\n"+lines.join("\n\n")+"\n\nUse /sync-roles to refresh your Chaster-derived roles. This dashboard is private to you.";
+}
 export async function handleCommand(i){const n=i.commandName;
+if(n==="dashboard"){
+const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+const content=await buildMemberDashboard(i.guild,i.user,admin);
+const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashboard:refresh").setLabel("Refresh dashboard").setStyle(ButtonStyle.Primary));
+return i.reply({ephemeral:true,content,components:[row]});
+}
 if(n==="lock-status"&&!await requireConfiguredRole(i,"wearer"))return;
 if((n==="keyholder-locks"||n==="time-change"||n==="keyholder-notes"||n==="keyholder-notes-delete")&&!await requireConfiguredRole(i,"keyholder"))return;
 if(n==="keyholder-applications"&&!await requireConfiguredRole(i,"wearer"))return;
@@ -244,7 +272,15 @@ if(n==="keyholder-chat"){await i.deferReply();return i.editReply(await keyholder
 if(n==="audit"){const a=recentAudit(i.guildId,10);return i.reply({ephemeral:true,content:a.length?a.map(x=>"• <t:"+Math.floor(new Date(x.created_at+" UTC").getTime()/1000)+":R> <@"+x.actor_id+"> — "+x.action+": "+x.details).join("\n"):"No audit entries yet."});}
 }
 export async function handleButton(i){
-if(i.customId.startsWith("session-accept:")||i.customId.startsWith("session-decline:")){const [action,id]=i.customId.split(":");const inv=consumeSessionInvite(id);if(!inv||inv.invitee_id!==i.user.id){await i.reply({ephemeral:true,content:"This invitation expired or is not addressed to you."});return true;}if(action==="session-decline"){await i.update({content:"You declined the private session invitation.",components:[]});return true;}const guild=await i.client.guilds.fetch(inv.guild_id).catch(()=>null);if(!guild){await i.update({content:"The server is unavailable.",components:[]});return true;}const parent=await guild.channels.fetch(inv.channel_id).catch(()=>null);if(!parent||parent.type!==ChannelType.GuildText){await i.update({content:"The configured session channel is unavailable.",components:[]});return true;}try{const inviter=await guild.members.fetch(inv.inviter_id),invitee=await guild.members.fetch(inv.invitee_id);const thread=await parent.threads.create({name:("Chaster · "+inviter.user.username+" + "+invitee.user.username).slice(0,100),autoArchiveDuration:1440,type:ChannelType.PrivateThread,invitable:false,reason:"Mutual opt-in ChasterBot session"});await thread.members.add(inv.inviter_id);await thread.members.add(inv.invitee_id);await thread.send({content:"Welcome to your private ChasterBot session. Participants: <@"+inv.inviter_id+"> and <@"+inv.invitee_id+">. The bot can help with lock status, optional challenges and coordination. Both participants can leave at any time. Do not share passwords or access tokens here.",allowedMentions:{users:[inv.inviter_id,inv.invitee_id]}});await i.update({content:"You accepted. Your private session thread has been created: "+thread.toString(),components:[]});await inviter.send("Your ChasterBot session with "+invitee.user.username+" is ready: "+thread.toString()).catch(()=>{});}catch(e){console.error("Private session creation failed:",e.message);await i.update({content:"Could not create the private thread. Ask a server admin to check the bot's Create Private Threads, Manage Threads and Send Messages in Threads permissions.",components:[]});}return true;}
+if(i.customId==="dashboard:refresh"){
+if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+const content=await buildMemberDashboard(i.guild,i.user,admin);
+await i.update({content,components:i.message.components});
+return true;
+}
+
+if(i.customId.startsWith("session-accept:")||i.customId.startsWith("session-decline:")){const [action,id]=i.customId.split(":");const inv=consumeSessionInvite(id);if(!inv||inv.invitee_id!==i.user.id){await i.reply({ephemeral:true,content:"This invitation expired or is not addressed to you."});return true;}if(action==="session-decline"){await i.update({content:"You declined the private session invitation.",components:[]});return true;}const guild=await i.client.guilds.fetch(inv.guild_id).catch(()=>null);if(!guild){await i.update({content:"The server is unavailable.",components:[]});return true;}const parent=await guild.channels.fetch(inv.channel_id).catch(()=>null);if(!parent||parent.type!==ChannelType.GuildText){await i.update({content:"The configured session channel is unavailable.",components:[]});return true;}try{const inviter=await guild.members.fetch(inv.inviter_id),invitee=await guild.members.fetch(inv.invitee_id);const thread=await parent.threads.create({name:("Chaster · "+inviter.user.username+" + "+invitee.user.username).slice(0,100),autoArchiveDuration:1440,type:ChannelType.PrivateThread,invitable:false,reason:"Mutual opt-in ChasterBot session"});await thread.members.add(inv.inviter_id);await thread.members.add(inv.invitee_id);recordPrivateSession(id,inv.guild_id,thread.id,inv.inviter_id,inv.invitee_id);await thread.send({content:"Welcome to your private ChasterBot session. Participants: <@"+inv.inviter_id+"> and <@"+inv.invitee_id+">. The bot can help with lock status, optional challenges and coordination. Both participants can leave at any time. Do not share passwords or access tokens here.",allowedMentions:{users:[inv.inviter_id,inv.invitee_id]}});await i.update({content:"You accepted. Your private session thread has been created: "+thread.toString(),components:[]});await inviter.send("Your ChasterBot session with "+invitee.user.username+" is ready: "+thread.toString()).catch(()=>{});}catch(e){console.error("Private session creation failed:",e.message);await i.update({content:"Could not create the private thread. Ask a server admin to check the bot's Create Private Threads, Manage Threads and Send Messages in Threads permissions.",components:[]});}return true;}
 if(i.customId.startsWith("knd:")||i.customId.startsWith("knx:")){
 const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"keyholder-note-delete",action,"knd","knx");const p=result.entry;
 if(result.status==="invalid"){await i.reply({ephemeral:true,content:"This confirmation expired or belongs to another user."});return true;}
