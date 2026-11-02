@@ -4,6 +4,7 @@ Independent Discord companion for Chaster using the official Public API.
 
 ## Implemented in this build
 - Discord slash commands and private Chaster account linking
+- Chaster authorization health tracking, private relink alerts on detected authorization failures, and `/chaster-link-status` for a private connection check
 - OAuth 2 authorization-code exchange and refresh-token flow
 - AES-256-GCM encrypted OAuth token storage in SQLite
 - Personal lock status, keyholder lock listing and Chaster profile
@@ -51,7 +52,7 @@ ChasterBot requests only the scopes used by its current features:
 - `notifications:read`, `notifications:write`: notification views and read actions
 - `calendar:read`, `calendar:write`: calendar event views and edits
 
-The bot does not request profile editing, user writing, messaging writing or post-management scopes. If you linked ChasterBot before this scope reduction, run `/link-chaster` again and approve the updated consent screen; existing access/refresh tokens do not automatically gain newly requested scopes.
+The bot does not request profile editing, user writing, messaging writing or post-management scopes. If you linked ChasterBot before this scope reduction, run `/link-chaster` again and approve the updated consent screen; existing access/refresh tokens do not automatically gain newly requested scopes. The bot also records Chaster 401 responses and revoked/invalid refresh grants as a connection-health issue, sends a private relink prompt with a 24-hour notification throttle, and clears the warning after successful reauthorization. Run `/chaster-link-status` to check your own connection. Unlinking clears the local health record.
 
 Official documentation:
 - https://docs.chaster.app/api/basics/getting-started/
