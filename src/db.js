@@ -78,3 +78,8 @@ export function markDiscordNotificationFailed(id,error,{retryAt=null,maxAttempts
 export function getDiscordNotificationQueueStats(){
   return db.prepare("SELECT status,COUNT(*) AS count FROM discord_notification_queue GROUP BY status").all().reduce((a,x)=>(a[x.status]=x.count,a),{pending:0,sent:0,failed:0});
 }
+
+export function pruneDiscordNotificationQueue(now=Date.now()){
+  const sentBefore=now-30*86400000,failedBefore=now-90*86400000;
+  return db.prepare("DELETE FROM discord_notification_queue WHERE (status='sent' AND sent_at<?) OR (status='failed' AND created_at<?)").run(sentBefore,failedBefore).changes;
+}
