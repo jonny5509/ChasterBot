@@ -16,7 +16,8 @@ CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY,discord_id TEXT N
 CREATE TABLE IF NOT EXISTS notification_optins(guild_id TEXT NOT NULL,discord_id TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(guild_id,discord_id));
 CREATE TABLE IF NOT EXISTS lock_snapshots(discord_id TEXT NOT NULL,lock_id TEXT NOT NULL,fingerprint TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(discord_id,lock_id));
 CREATE TABLE IF NOT EXISTS reward_items(id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('reward','punishment')),title TEXT NOT NULL,description TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-CREATE TABLE IF NOT EXISTS session_invites(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,channel_id TEXT NOT NULL,inviter_id TEXT NOT NULL,invitee_id TEXT NOT NULL,expires_at INTEGER NOT NULL);\nCREATE TABLE IF NOT EXISTS discord_notification_queue(id INTEGER PRIMARY KEY AUTOINCREMENT,dedupe_key TEXT NOT NULL UNIQUE,destination_type TEXT NOT NULL CHECK(destination_type IN ('user','channel')),target_id TEXT NOT NULL,content TEXT NOT NULL,allowed_mentions TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sent','failed')),attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,sent_at INTEGER);\nCREATE INDEX IF NOT EXISTS idx_notification_queue_due ON discord_notification_queue(status,next_attempt_at,id);
+CREATE TABLE IF NOT EXISTS session_invites(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,channel_id TEXT NOT NULL,inviter_id TEXT NOT NULL,invitee_id TEXT NOT NULL,expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS private_sessions(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,thread_id TEXT NOT NULL UNIQUE,inviter_id TEXT NOT NULL,invitee_id TEXT NOT NULL,created_at INTEGER NOT NULL);\nCREATE TABLE IF NOT EXISTS discord_notification_queue(id INTEGER PRIMARY KEY AUTOINCREMENT,dedupe_key TEXT NOT NULL UNIQUE,destination_type TEXT NOT NULL CHECK(destination_type IN ('user','channel')),target_id TEXT NOT NULL,content TEXT NOT NULL,allowed_mentions TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sent','failed')),attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,sent_at INTEGER);\nCREATE INDEX IF NOT EXISTS idx_notification_queue_due ON discord_notification_queue(status,next_attempt_at,id);
 CREATE TABLE IF NOT EXISTS notification_admin_alerts(guild_id TEXT PRIMARY KEY,last_alert_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS notification_channel_pauses(guild_id TEXT PRIMARY KEY,channel_id TEXT NOT NULL,reason TEXT NOT NULL,paused_at INTEGER NOT NULL);
 `);
@@ -53,6 +54,18 @@ export function setSessionChannel(g,c,a){db.prepare("INSERT INTO guild_settings(
 export function getSessionChannel(g){return db.prepare("SELECT session_channel_id FROM guild_settings WHERE guild_id=?").get(g)?.session_channel_id??null;}
 export function createSessionInvite(id,g,c,from,to,expires){db.prepare("INSERT INTO session_invites(id,guild_id,channel_id,inviter_id,invitee_id,expires_at) VALUES (?,?,?,?,?,?)").run(id,g,c,from,to,expires);}
 export function consumeSessionInvite(id){const x=db.prepare("SELECT * FROM session_invites WHERE id=?").get(id);db.prepare("DELETE FROM session_invites WHERE id=?").run(id);return x&&x.expires_at>Date.now()?x:null;}
+export function recordPrivateSession(id,guildId,threadId,inviterId,inviteeId){
+  db.prepare("INSERT INTO private_sessions(id,guild_id,thread_id,inviter_id,invitee_id,created_at) VALUES (?,?,?,?,?,?)").run(String(id),String(guildId),String(threadId),String(inviterId),String(inviteeId),Date.now());
+}
+export function getMemberSessionDashboard(guildId,discordId){
+  const id=String(discordId),guild=String(guildId);
+  const sessions=db.prepare("SELECT thread_id,inviter_id,invitee_id,created_at FROM private_sessions WHERE guild_id=? AND (inviter_id=? OR invitee_id=?) ORDER BY created_at DESC LIMIT 5").all(guild,id,id);
+  const invites=db.prepare("SELECT inviter_id,invitee_id,expires_at FROM session_invites WHERE guild_id=? AND expires_at>? AND (inviter_id=? OR invitee_id=?) ORDER BY expires_at LIMIT 5").all(guild,Date.now(),id,id);
+  return {sessions,invites};
+}
+export function getGuildRoleSettings(guildId){
+  return db.prepare("SELECT wearer_role_id,keyholder_role_id FROM guild_settings WHERE guild_id=?").get(String(guildId))??{wearer_role_id:null,keyholder_role_id:null};
+}
 
 export function markChasterLinkNeedsReauth(id,reason="authorization rejected"){
   const previous=db.prepare("SELECT status,last_notified_at FROM chaster_link_health WHERE discord_id=?").get(id);
