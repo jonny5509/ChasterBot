@@ -22,7 +22,7 @@ Independent Discord companion for Chaster using the official Public API.
 - Notification-channel configuration, member notification pause/resume and status, privacy-preserving admin delivery-queue counts, failed-delivery review and retry, notification-channel health diagnostics, six-hour-throttled server-owner alerts for terminal delivery failures, and admin audit command
 - Configurable Wearer/Keyholder role synchronization and role-gated commands
 - Mutual-consent private Discord session invitations using private threads
-- Private, tabbed `/dashboard` member panel with Overview, Roles, Sessions and Account views; Manage Server users also get an Admin tab for configured roles and session-channel settings. Dashboard buttons are bound to the invoking member and refresh their private panel
+- Private, tabbed `/dashboard` member panel with Overview, Roles, Sessions and Account views; live personal and keyheld Chaster locks with statuses and visible timers appear in Overview/Account. Manage Server users also get an Admin tab for configured roles and session-channel settings. Dashboard buttons are bound to the invoking member and refresh their private panel; temporary Chaster API failures are shown without breaking the dashboard
 
 ## Requirements
 - Node.js 20+
