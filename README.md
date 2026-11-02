@@ -75,7 +75,7 @@ Official documentation:
 /chaster-calendar, /calendar-event-add, /calendar-event-edit, /calendar-event-delete, /chaster-calendar-stats, /chaster-settings, /permission-catalog, /chaster-lock-stats-config, /chaster-community-categories
 
 **Community and administration:**  
-/profile, /leaderboard, /notifications, /notify-channel, /challenge, /challenge-join, /challenge-approve, /award-points, /reward-add, /punishment-add, /reward-list, /punishment-list, /dice, /keyholder-chat, /audit, /configure-roles, /sync-roles, /session-channel, /session-invite, /help
+/profile, /leaderboard, /notifications, /notification-status, /notification-queue-status, /notification-failures, /notification-retry, /notify-channel, /challenge, /challenge-join, /challenge-approve, /award-points, /reward-add, /punishment-add, /reward-list, /punishment-list, /dice, /keyholder-chat, /audit, /configure-roles, /sync-roles, /session-channel, /session-invite, /help
 
 ## Safety and limitations
 - The bot never asks for Chaster passwords; users link through OAuth.
