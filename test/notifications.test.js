@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";\nimport {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent} from "../src/db.js";
+import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";\nimport {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -27,4 +27,15 @@ test("notification queue persists an event and suppresses duplicate enqueue",()=
   assert.equal(row.content,"Test notification");
   markDiscordNotificationSent(row.id);
   assert.equal(getDueDiscordNotifications(100).some(x=>x.dedupe_key===key),false);
+});
+
+test("notification preferences can be paused and resumed per server",()=>{
+  const guild="notification-pref-guild-"+Date.now(),user="notification-pref-user-"+Math.random();
+  assert.equal(getNotificationPreference(guild,user),false);
+  setNotificationOptIn(guild,user,true);
+  assert.equal(getNotificationPreference(guild,user),true);
+  setNotificationOptIn(guild,user,false);
+  assert.equal(getNotificationPreference(guild,user),false);
+  setNotificationChannel(guild,"notification-channel-"+Date.now(),"test-admin");
+  assert.match(getNotificationChannel(guild),/^notification-channel-/);
 });
