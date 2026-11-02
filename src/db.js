@@ -108,8 +108,6 @@ export function getGuildForNotificationChannel(channelId){
   return db.prepare("SELECT guild_id FROM guild_settings WHERE notification_channel_id=? LIMIT 1").get(String(channelId))?.guild_id??null;
 }
 export function claimNotificationAdminAlert(guildId,now=Date.now(),cooldownMs=6*60*60*1000){
-  const row=db.prepare("SELECT last_alert_at FROM notification_admin_alerts WHERE guild_id=?").get(String(guildId));
-  if(row&&now-row.last_alert_at<cooldownMs)return false;
-  db.prepare("INSERT INTO notification_admin_alerts(guild_id,last_alert_at) VALUES (?,?) ON CONFLICT(guild_id) DO UPDATE SET last_alert_at=excluded.last_alert_at").run(String(guildId),now);
-  return true;
+  const result=db.prepare("INSERT INTO notification_admin_alerts(guild_id,last_alert_at) VALUES (?,?) ON CONFLICT(guild_id) DO UPDATE SET last_alert_at=excluded.last_alert_at WHERE notification_admin_alerts.last_alert_at<=?").run(String(guildId),now,now-cooldownMs);
+  return result.changes===1;
 }
