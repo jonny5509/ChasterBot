@@ -1,5 +1,5 @@
 import {randomUUID} from "node:crypto";
-import {getAllLinkedAccounts,getGuildSettings,getOptedInUsers,getLockSnapshot,setLockSnapshot,enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,markDiscordNotificationFailed,pruneDiscordNotificationQueue} from "./db.js";
+import {getAllLinkedAccounts,getGuildSettings,getOptedInUsers,getLockSnapshot,setLockSnapshot,enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,markDiscordNotificationFailed,pruneDiscordNotificationQueue,getGuildForNotificationChannel,claimNotificationAdminAlert,enqueueDiscordNotification} from "./db.js";
 import {getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks} from "./chaster.js";
 
@@ -23,6 +23,33 @@ export function enqueueChasterReauthNotification(discordId){
     targetId:String(discordId),
     content:"Your ChasterBot connection needs attention. Chaster rejected the saved authorization. Run /link-chaster in the server and approve access again."
   });
+}
+
+
+function safeAdminFailureReason(error){
+  const s=String(error?.message||error||"").toLowerCase();
+  if(Number(error?.code)===10003||s.includes("unknown channel"))return "the configured channel is missing";
+  if(Number(error?.code)===50001||Number(error?.code)===50013||s.includes("missing permissions"))return "the bot lacks channel permissions";
+  if(Number(error?.status)===429)return "Discord rate limited delivery repeatedly";
+  return "Discord rejected delivery after retries";
+}
+async function alertGuildOwnerOfNotificationFailure(client,item,error){
+  try{
+    const guildId=getGuildForNotificationChannel(item.target_id);
+    if(!guildId)return false;
+    const guild=client.guilds.cache.get(guildId)||await client.guilds.fetch(guildId);
+    if(!guild?.ownerId||!claimNotificationAdminAlert(guildId))return false;
+    const user=await client.users.fetch(guild.ownerId);
+    return enqueueDiscordNotification({
+      dedupeKey:"notification-admin-alert:"+guildId+":"+randomUUID(),
+      destinationType:"user",
+      targetId:guild.ownerId,
+      content:"ChasterBot could not deliver a server notification. Reason: "+safeAdminFailureReason(error)+". Queue item ID: "+item.id+". In your server, run /notification-health and /notification-failures; use /notification-retry if appropriate. Alerts are limited to one per server every six hours."
+    });
+  }catch(e){
+    console.warn("Could not send notification failure alert:",e?.message||"unknown error");
+    return false;
+  }
 }
 
 let deliveryBusy=false;
@@ -49,6 +76,7 @@ export async function processPendingDiscordNotifications(client){
         const attempts=Number(item.attempts||0);
         const retryAt=permanent||attempts+1>=MAX_DELIVERY_ATTEMPTS?null:Date.now()+notificationRetryDelay(attempts);
         markDiscordNotificationFailed(item.id,error?.message||"Discord delivery failed",{retryAt,maxAttempts:MAX_DELIVERY_ATTEMPTS});
+        if(retryAt===null||attempts+1>=MAX_DELIVERY_ATTEMPTS){if(item.destination_type==="channel")await alertGuildOwnerOfNotificationFailure(client,item,error);}
         console.warn("Discord notification delivery failed:",item.id,error?.message||"unknown error",permanent?"(permanent)":"");
       }
     }
