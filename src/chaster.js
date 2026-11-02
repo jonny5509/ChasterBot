@@ -39,3 +39,5 @@ export function getIgnoredUsers(token){return chasterRequest("/messaging/ignored
 export function getLockStatsResetConfig(token){return chasterRequest("/lock-stats/reset-config",{token});}
 export function getCommunityEventCategories(token){return chasterRequest("/community-event/categories",{token});}
 export function getApiHealth(token){return chasterRequest("/health",{token});}
+export function getPublicLocks(userId,token){return chasterRequest("/locks/user/"+encodeURIComponent(userId),{token});}
+export function getProfileCompleteness(token){return chasterRequest("/users/profile-completeness",{token});}
