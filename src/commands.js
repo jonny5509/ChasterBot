@@ -372,7 +372,7 @@ const action=parts[1],tab=action==="refresh"?parts[2]:action,userId=action==="re
 if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
 if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-const allowedTabs=["overview","roles","sessions","account","admin"];
+const allowedTabs=["overview","roles","sessions","account","commands","admin"];
 const selected=allowedTabs.includes(tab)?tab:"overview";
 if(selected==="admin"&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to view this tab."});return true;}
 const content=await buildMemberDashboard(i.guild,i.user,admin,selected);
