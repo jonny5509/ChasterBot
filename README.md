@@ -58,3 +58,13 @@ Official documentation:
 
 ## Production checklist
 Use HTTPS, a persistent host and secret manager; lock down database permissions; encrypt backups; configure least-privilege Discord roles/channels; monitor API rate limits; never log credentials.
+
+
+## Automatic Discord roles and private sessions
+1. Give the bot the **Manage Roles**, **Create Private Threads**, **Manage Threads**, **Send Messages**, and **Send Messages in Threads** permissions.
+2. In Server Settings > Roles, create the Wearer and Keyholder roles. Move the bot's role above both.
+3. Run `/configure-roles wearer:@Wearer keyholder:@Keyholder` as a member with Manage Roles. Role sync checks linked Chaster accounts every 10 minutes; users can run `/sync-roles` themselves.
+4. The role sync assigns Wearer when the linked account has an active personal lock and Keyholder when the account has active keyholder locks. Both roles can be assigned. It removes the configured role when no active locks are found.
+5. Run `/session-channel channel:#private-sessions` as an admin. Both participants link Chaster, then one runs `/session-invite user:@OtherMember`. The other participant must accept the DM invite before the bot creates a private thread and adds both people.
+
+Discord bots cannot join ordinary group DMs. Private threads are the supported bot-accessible alternative. They are visible only to invited thread members and server staff with appropriate permissions. Keep the parent channel's permissions restricted.
