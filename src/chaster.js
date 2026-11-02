@@ -41,3 +41,6 @@ export function getCommunityEventCategories(token){return chasterRequest("/commu
 export function getApiHealth(token){return chasterRequest("/health",{token});}
 export function getPublicLocks(userId,token){return chasterRequest("/locks/user/"+encodeURIComponent(userId),{token});}
 export function getProfileCompleteness(token){return chasterRequest("/users/profile-completeness",{token});}
+export function createCalendarEvent(data,token){return chasterRequest("/calendar/events",{token,method:"POST",body:data});}
+export function updateCalendarEvent(eventId,data,token){return chasterRequest("/calendar/events/"+encodeURIComponent(eventId),{token,method:"PATCH",body:data});}
+export function deleteCalendarEvent(eventId,token){return chasterRequest("/calendar/events/"+encodeURIComponent(eventId),{token,method:"DELETE"});}
