@@ -52,7 +52,7 @@ Official documentation:
 /lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog
 /chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications
 /chaster-conversation, /chaster-messages, /shared-lock-favorite, /shared-lock-favorite-add, /shared-lock-favorite-remove, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all
-/shared-lock-details, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
+/shared-lock-details, /shared-lock-archive, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
 /chaster-achievement-categories, /chaster-ignored-users, /chaster-lock-stats-config, /chaster-community-categories, /chaster-api-health
 /chaster-public-locks, /chaster-profile-completeness
 /calendar-event-add, /calendar-event-edit, /calendar-event-delete
