@@ -7,7 +7,9 @@ Independent Discord companion for Chaster using the official Public API.
 - OAuth 2 authorization-code exchange and refresh-token flow
 - AES-256-GCM encrypted OAuth token storage in SQLite
 - Personal lock status, keyholder lock listing and Chaster profile
-- Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views\n- Shared-lock details and tags, extension catalogue, Explore categories, calendar statistics and blocked-user list\n- Notification read and read-all actions
+- Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views
+- Shared-lock details and tags, extension catalogue, Explore categories, calendar statistics and blocked-user list
+- Notification read and read-all actions
 - Read-only lock detail, lock seal, keyholder notes, application settings, permission catalogue, user overviews/statistics, achievements, badge counts, lock history and keyholder applications
 - Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
 - Opt-in lock-change notifications via five-minute polling
@@ -45,7 +47,10 @@ Official documentation:
 ## Commands
 /link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change
 /chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications
-/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog\n/chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications\n/chaster-conversation, /chaster-messages, /shared-lock-favorite, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all\n/shared-lock-details, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
+/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog
+/chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications
+/chaster-conversation, /chaster-messages, /shared-lock-favorite, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all
+/shared-lock-details, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
 /notifications, /notify-channel, /profile, /leaderboard, /award-points
 /challenge, /challenge-join, /challenge-approve
 /reward-add, /punishment-add, /reward-list, /punishment-list
