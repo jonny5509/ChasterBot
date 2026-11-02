@@ -8,7 +8,7 @@ Independent Discord companion for Chaster using the official Public API.
 - AES-256-GCM encrypted OAuth token storage in SQLite
 - Personal lock status, keyholder lock listing and Chaster profile
 - Read-only shared lock, private conversation, calendar and notification-count views
-- Read-only lock detail, lock seal, keyholder notes, application settings and permission catalogue
+- Read-only lock detail, lock seal, keyholder notes, application settings, permission catalogue, user overviews/statistics, achievements, badge counts, lock history and keyholder applications
 - Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
 - Opt-in lock-change notifications via five-minute polling
 - Profiles, points, leaderboards, community challenges and admin approval
@@ -34,7 +34,7 @@ Independent Discord companion for Chaster using the official Public API.
 Never commit .env or share Discord tokens, Chaster secrets, access/refresh tokens or AI API keys. Losing the encryption key makes saved OAuth tokens unreadable.
 
 ## OAuth scopes requested
-profile, profile:read, locks:read, locks:write, shared_locks:read, keyholder:read, keyholder:write, messaging:read, notifications:read, calendar:read. The new read scopes enable Chaster profile, shared-lock, conversation, notification-count and calendar commands. Users must relink and approve the updated consent request.
+profile, profile:read/write, users:read/write, locks:read/write, shared_locks:read/write, keyholder:read/write, messaging:read/write, notifications:read/write, calendar:read/write, posts:read/write. Users must relink and approve the expanded consent request.
 
 Official documentation:
 - https://docs.chaster.app/api/basics/getting-started/
@@ -45,7 +45,7 @@ Official documentation:
 ## Commands
 /link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change
 /chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications
-/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog
+/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog\n/chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications
 /notifications, /notify-channel, /profile, /leaderboard, /award-points
 /challenge, /challenge-join, /challenge-approve
 /reward-add, /punishment-add, /reward-list, /punishment-list
@@ -79,4 +79,4 @@ Discord does not support dynamically hiding individual slash commands based on a
 
 
 ## Chaster API coverage roadmap
-This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder locks, shared locks, conversations, calendar, notification counts, lock details/seals, keyholder notes, app settings and permission definitions. Remaining endpoint families are being added in separate reviewed batches: lock/shared-lock writes, messaging actions, notifications, calendar writes, profile/user tools, keyholder applications, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
+This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder/shared locks, conversations, calendar, notification counts, lock details/seals/history, keyholder notes/applications, app settings, permission definitions, user overviews/statistics, achievements and badge counts. Remaining endpoint families are being added in separate reviewed batches: lock/shared-lock writes, messaging actions, notification actions, calendar writes, profile/user tools, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
