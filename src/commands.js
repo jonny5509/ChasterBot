@@ -112,7 +112,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   else if(tab==="account")body=account+"\n\nUse /link-chaster to connect or reconnect, /chaster-link-status for connection diagnostics, and /unlink-chaster to remove the saved connection.";
   else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
   else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\n\nChoose a tab below to see details.";
-  return title+"\n\n"+body+"\n\n<text>Private to you · refreshed on demand</text>";
+  return title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand";
 }
 function buildDashboardComponents(userId,isAdmin,tab="overview"){
   const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"]];
