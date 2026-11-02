@@ -1,5 +1,5 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType} from "discord.js";
-import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession} from "./db.js";
+import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
@@ -129,19 +129,27 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\nActive wearer locks: "+personalLocks.length+"\nActive keyholder locks: "+keyholderLocks.length+(lockLoadError?"\nLock data: unavailable":"")+"\n\nChoose a tab below to see details.";
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
-function buildDashboardComponents(userId,isAdmin,tab="overview"){
+function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
   const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const nav=new ActionRowBuilder().addComponents(...tabs.map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary)));
   const refresh=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashboard:refresh:"+tab+":"+userId).setLabel("Refresh").setStyle(ButtonStyle.Success));
-  return [nav,refresh];
+  const rows=[nav,refresh];
+  if(tab==="sessions"){
+    const data=getMemberSessionDashboard(guild.id,userId);
+    const actions=[];
+    data.sessions.forEach((session,index)=>actions.push(new ButtonBuilder().setCustomId("dashclose:"+session.thread_id+":"+userId).setLabel("Close session "+(index+1)).setStyle(ButtonStyle.Danger)));
+    data.invites.forEach((invite,index)=>actions.push(new ButtonBuilder().setCustomId("dashinvite:"+invite.id+":"+userId).setLabel((invite.inviter_id===userId?"Cancel invite ":"Decline invite ")+(index+1)).setStyle(ButtonStyle.Secondary)));
+    for(let i=0;i<actions.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...actions.slice(i,i+5)));
+  }
+  return rows;
 }
 export async function handleCommand(i){const n=i.commandName;
 if(n==="dashboard"){
 if(!i.guild)return i.reply({ephemeral:true,content:"Open the dashboard from a server."});
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 const content=await buildMemberDashboard(i.guild,i.user,admin,"overview");
-return i.reply({ephemeral:true,content,components:buildDashboardComponents(i.user.id,admin,"overview")});
+return i.reply({ephemeral:true,content,components:buildDashboardComponents(i.guild,i.user.id,admin,"overview")});
 }
 if(n==="lock-status"&&!await requireConfiguredRole(i,"wearer"))return;
 if((n==="keyholder-locks"||n==="time-change"||n==="keyholder-notes"||n==="keyholder-notes-delete")&&!await requireConfiguredRole(i,"keyholder"))return;
@@ -299,6 +307,32 @@ if(n==="keyholder-chat"){await i.deferReply();return i.editReply(await keyholder
 if(n==="audit"){const a=recentAudit(i.guildId,10);return i.reply({ephemeral:true,content:a.length?a.map(x=>"• <t:"+Math.floor(new Date(x.created_at+" UTC").getTime()/1000)+":R> <@"+x.actor_id+"> — "+x.action+": "+x.details).join("\n"):"No audit entries yet."});}
 }
 export async function handleButton(i){
+if(i.customId.startsWith("dashclose:")){
+const [,threadId,userId]=i.customId.split(":");
+if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+const owned=getMemberSessionDashboard(i.guild.id,i.user.id).sessions.some(session=>session.thread_id===threadId);
+if(!owned){await i.reply({ephemeral:true,content:"That session is not available to you."});return true;}
+const thread=await i.guild.channels.fetch(threadId).catch(()=>null);
+if(!thread||!thread.isThread?.()){await i.reply({ephemeral:true,content:"The session thread could not be found."});return true;}
+if(thread.archived){deletePrivateSession(i.guild.id,threadId,i.user.id);await i.update({content:await buildMemberDashboard(i.guild,i.user,Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)),"sessions"),components:buildDashboardComponents(i.guild,i.user.id,Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)),"sessions")});return true;}
+try{
+await thread.setArchived(true,"Closed by a session participant");
+deletePrivateSession(i.guild.id,threadId,i.user.id);
+const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+await i.update({content:"Session closed and archived.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
+}catch(error){await i.reply({ephemeral:true,content:"I couldn't archive that session. Check the bot's Manage Threads permission."});}
+return true;
+}
+if(i.customId.startsWith("dashinvite:")){
+const [,inviteId,userId]=i.customId.split(":");
+if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+if(!deleteSessionInvite(inviteId,i.guild.id,i.user.id)){await i.reply({ephemeral:true,content:"That invitation has expired or is no longer available."});return true;}
+const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
+return true;
+}
 if(i.customId.startsWith("dashboard:")){
 const parts=i.customId.split(":");
 const action=parts[1],tab=action==="refresh"?parts[2]:action,userId=action==="refresh"?parts[3]:parts[2];
@@ -309,7 +343,7 @@ const allowedTabs=["overview","roles","sessions","account","admin"];
 const selected=allowedTabs.includes(tab)?tab:"overview";
 if(selected==="admin"&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to view this tab."});return true;}
 const content=await buildMemberDashboard(i.guild,i.user,admin,selected);
-await i.update({content,components:buildDashboardComponents(i.user.id,admin,selected)});
+await i.update({content,components:buildDashboardComponents(i.guild,i.user.id,admin,selected)});
 return true;
 }
 
