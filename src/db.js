@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS lock_snapshots(discord_id TEXT NOT NULL,lock_id TEXT 
 CREATE TABLE IF NOT EXISTS reward_items(id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('reward','punishment')),title TEXT NOT NULL,description TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 `);
 export function ensureProfile(user){db.prepare("INSERT INTO profiles(discord_id,display_name) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET display_name=excluded.display_name").run(user.id,user.username);return db.prepare("SELECT * FROM profiles WHERE discord_id=?").get(user.id);}
-export function addPoints(id,name,points){ensureProfile({id,username:name});db.prepare("UPDATE profiles SET points=MAX(0,points+?) WHERE discord_id=?").run(points,id);}
+export function addPoints(id,name,points){db.prepare("INSERT OR IGNORE INTO profiles(discord_id,display_name) VALUES (?,?)").run(id,name);db.prepare("UPDATE profiles SET points=MAX(0,points+?) WHERE discord_id=?").run(points,id);}
 export function leaderboard(limit=10){return db.prepare("SELECT discord_id,display_name,points FROM profiles ORDER BY points DESC,display_name COLLATE NOCASE LIMIT ?").all(limit);}
 export function setNotificationChannel(g,c,a){db.prepare("INSERT INTO guild_settings(guild_id,notification_channel_id) VALUES (?,?) ON CONFLICT(guild_id) DO UPDATE SET notification_channel_id=excluded.notification_channel_id,updated_at=CURRENT_TIMESTAMP").run(g,c);audit(g,a,"notification_channel_set",c);}
 export function getGuildSettings(){return db.prepare("SELECT guild_id,notification_channel_id FROM guild_settings WHERE notification_channel_id IS NOT NULL").all();}
