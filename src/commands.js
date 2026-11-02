@@ -361,7 +361,7 @@ if(i.customId.startsWith('dashaccount:')){
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:'This dashboard belongs to another member.'});return true;}
   if(!i.guild){await i.reply({ephemeral:true,content:'Open the dashboard from a server.'});return true;}
   if(action==='link'){
-    await i.reply({ephemeral:true,content:'Authorize Chaster using this private link (expires in 10 minutes):\\n'+createAuthorizationUrl(i.user.id)});
+    await i.reply({ephemeral:true,content:'Authorize Chaster using this private link (expires in 10 minutes):\n'+createAuthorizationUrl(i.user.id)});
     return true;
   }
   if(action==='status'){
@@ -523,14 +523,14 @@ export async function handleModal(i){
       if(action==="notes"){
         const notes=await getKeyholderNotes(lockId,token);
         const output=typeof notes==="string"?notes:JSON.stringify(notes,null,2);
-        await i.editReply("**Keyholder notes · "+String(lock.title||lockId)+"**\\n"+(output||"No notes returned.").slice(0,1700));
+        await i.editReply("**Keyholder notes · "+String(lock.title||lockId)+"**\n"+(output||"No notes returned.").slice(0,1700));
         return true;
       }
       if(action==="delete-notes"){
         const nonce=randomUUID();
         pending.set(nonce,{user:i.user.id,lockId,guildId:i.guildId,kind:"keyholder-note-delete",created:Date.now()});
         const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("knd:"+nonce).setLabel("Confirm delete notes").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("knx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));
-        await i.editReply({content:"**Confirm deletion of private keyholder notes**\\n"+String(lock.title||lockId)+"\\nThis cannot be undone. No deletion occurs unless you confirm.",components:[row]});
+        await i.editReply({content:"**Confirm deletion of private keyholder notes**\n"+String(lock.title||lockId)+"\nThis cannot be undone. No deletion occurs unless you confirm.",components:[row]});
         return true;
       }
       if(action==="time"){
@@ -543,7 +543,7 @@ export async function handleModal(i){
         const nonce=randomUUID();
         pending.set(nonce,{user:i.user.id,lockId,seconds,reason,guildId:i.guildId,kind:"time-change",created:Date.now()});
         const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("tc:"+nonce).setLabel("Confirm time change").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("tx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));
-        await i.editReply({content:"**Confirm Chaster time change**\\n"+String(lock.title||lockId)+"\\n"+(seconds>0?"Add ":"Remove ")+Math.abs(seconds)+" seconds\\nReason: "+reason+"\\nNo change occurs unless you press Confirm.",components:[row]});
+        await i.editReply({content:"**Confirm Chaster time change**\n"+String(lock.title||lockId)+"\n"+(seconds>0?"Add ":"Remove ")+Math.abs(seconds)+" seconds\nReason: "+reason+"\nNo change occurs unless you press Confirm.",components:[row]});
         return true;
       }
       await i.editReply("Unknown Keyholder action.");
