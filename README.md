@@ -63,7 +63,7 @@ Official documentation:
 ## Commands
 
 **Account and locks:**  
-/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /lock-details, /lock-seal, /lock-history, /time-change, /keyholder-applications, /keyholder-notes, /keyholder-notes-delete
+/link-chaster, /chaster-link-status, /unlink-chaster, /lock-status, /keyholder-locks, /lock-details, /lock-seal, /lock-history, /time-change, /keyholder-applications, /keyholder-notes, /keyholder-notes-delete
 
 **Profiles and discovery:**  
 /chaster-profile, /chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /chaster-achievement-categories, /chaster-public-locks, /shared-locks, /shared-lock-details, /shared-lock-tags, /shared-lock-favorite, /shared-lock-favorite-add, /shared-lock-favorite-remove, /shared-lock-archive, /chaster-extensions, /chaster-explore-categories
