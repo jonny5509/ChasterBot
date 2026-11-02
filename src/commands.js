@@ -94,7 +94,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const linkHealth=getChasterLinkHealth(user.id);
   const settings=getGuildRoleSettings(guild.id);
   const roleLabel=(roleId)=>{if(!roleId)return "Not configured";const role=guild.roles.cache.get(roleId);return role?role.name+" ("+(member.roles.cache.has(roleId)?"assigned":"not assigned")+")":"Configured role missing";};
-  let personalLocks=[],keyholderLocks=[],lockLoadError=null;
+  let personalLocks=[],keyholderLocks=[],lockLoadError=!linked?"Link your Chaster account to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account with /link-chaster to load live locks.":null;
   if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account")){
     try{
       const token=await accessToken(user.id);
