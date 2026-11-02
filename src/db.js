@@ -58,6 +58,7 @@ export function deleteSessionInvite(id,guildId,discordId){return db.prepare("DEL
 export function recordPrivateSession(id,guildId,threadId,inviterId,inviteeId){
   db.prepare("INSERT INTO private_sessions(id,guild_id,thread_id,inviter_id,invitee_id,created_at) VALUES (?,?,?,?,?,?)").run(String(id),String(guildId),String(threadId),String(inviterId),String(inviteeId),Date.now());
 }
+export function deletePrivateSession(guildId,threadId,discordId){return db.prepare("DELETE FROM private_sessions WHERE guild_id=? AND thread_id=? AND (inviter_id=? OR invitee_id=?)").run(String(guildId),String(threadId),String(discordId),String(discordId)).changes>0;}
 export function getMemberSessionDashboard(guildId,discordId){
   const id=String(discordId),guild=String(guildId);
   const sessions=db.prepare("SELECT thread_id,inviter_id,invitee_id,created_at FROM private_sessions WHERE guild_id=? AND (inviter_id=? OR invitee_id=?) ORDER BY created_at DESC LIMIT 5").all(guild,id,id);
