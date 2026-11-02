@@ -1,7 +1,71 @@
 import {markChasterLinkNeedsReauth} from "./db.js";
 import {discordUserForChasterToken,notifyChasterAuthFailure} from "./auth-health.js";
 const API_BASE=process.env.CHASTER_API_BASE||"https://api.chaster.app";
-export async function chasterRequest(path,options={}){if(!options.token)throw new Error("Chaster account is not linked.");const r=await fetch(new URL(path,API_BASE),{method:options.method||"GET",headers:{Authorization:"Bearer "+options.token,Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{})},...(options.body?{body:JSON.stringify(options.body)}:{})});if(!r.ok){const body=await r.text().catch(()=>"");const error=new Error("Chaster API request failed ("+r.status+"): "+body.slice(0,160));error.status=r.status;error.code=r.status===401?"CHASTER_REAUTH_REQUIRED":undefined;if(r.status===401){const discordId=discordUserForChasterToken(options.token);if(discordId){error.discordId=discordId;error.notifyUser=markChasterLinkNeedsReauth(discordId,"Chaster rejected the access token");if(error.notifyUser)await notifyChasterAuthFailure(discordId);}}throw error;}return r.status===204?null:r.json();}
+const MAX_GET_RETRIES=2;
+const MAX_AUTOMATIC_RATE_LIMIT_WAIT_MS=1200;
+const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+function retryAfterMilliseconds(response){
+  const value=response.headers?.get?.("retry-after");
+  if(!value)return null;
+  const seconds=Number(value);
+  if(Number.isFinite(seconds)&&seconds>=0)return Math.ceil(seconds*1000);
+  const date=Date.parse(value);
+  return Number.isFinite(date)?Math.max(0,date-Date.now()):null;
+}
+function apiError(status,body,retryAfterMs=null){
+  const error=new Error("Chaster API request failed ("+status+"): "+String(body||"").slice(0,160));
+  error.status=status;
+  error.retryAfterMs=retryAfterMs;
+  if(status===401)error.code="CHASTER_REAUTH_REQUIRED";
+  if(status===429)error.code="CHASTER_RATE_LIMITED";
+  return error;
+}
+export async function chasterRequest(path,options={}){
+  if(!options.token)throw new Error("Chaster account is not linked.");
+  const method=String(options.method||"GET").toUpperCase();
+  const safeToRetry=method==="GET";
+  let attempt=0;
+  while(true){
+    let response;
+    try{
+      response=await fetch(new URL(path,API_BASE),{
+        method,
+        headers:{Authorization:"Bearer "+options.token,Accept:"application/json",...(options.body?{"Content-Type":"application/json"}:{})},
+        ...(options.body?{body:JSON.stringify(options.body)}:{})
+      });
+    }catch(error){
+      if(safeToRetry&&attempt<MAX_GET_RETRIES){
+        await sleep(250*Math.pow(2,attempt));
+        attempt++;
+        continue;
+      }
+      throw error;
+    }
+    if(response.ok)return response.status===204?null:response.json();
+    const retryAfterMs=response.status===429?retryAfterMilliseconds(response):null;
+    const body=await response.text().catch(()=>"");
+    if(response.status===429&&safeToRetry&&attempt<MAX_GET_RETRIES&&retryAfterMs!==null&&retryAfterMs<=MAX_AUTOMATIC_RATE_LIMIT_WAIT_MS){
+      await sleep(retryAfterMs);
+      attempt++;
+      continue;
+    }
+    if([502,503,504].includes(response.status)&&safeToRetry&&attempt<MAX_GET_RETRIES){
+      await sleep(250*Math.pow(2,attempt));
+      attempt++;
+      continue;
+    }
+    const error=apiError(response.status,body,retryAfterMs);
+    if(response.status===401){
+      const discordId=discordUserForChasterToken(options.token);
+      if(discordId){
+        error.discordId=discordId;
+        error.notifyUser=markChasterLinkNeedsReauth(discordId,"Chaster rejected the access token");
+        if(error.notifyUser)await notifyChasterAuthFailure(discordId);
+      }
+    }
+    throw error;
+  }
+}
 export function getMyLocks(token){return chasterRequest("/locks",{token});}
 export function getKeyholderLocks(token){return chasterRequest("/keyholder/locks/search",{token,method:"POST",body:{status:"locked",page:0,limit:50}});}
 export function getCurrentProfile(token){return chasterRequest("/auth/profile",{token});}
