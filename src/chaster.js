@@ -7,4 +7,9 @@ export function getSharedLocks(token){return chasterRequest("/shared-locks",{tok
 export function getConversations(token){return chasterRequest("/conversations",{token});}
 export function getCalendarEvents(token){return chasterRequest("/calendar/events",{token});}
 export function getNotificationCounts(token){return chasterRequest("/notifications/counts",{token});}
+export function getLockDetails(lockId,token){return chasterRequest("/locks/"+encodeURIComponent(lockId),{token});}
+export function getLockSeal(lockId,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/seal",{token});}
+export function getKeyholderNotes(lockId,token){return chasterRequest("/keyholder/notes/lock/"+encodeURIComponent(lockId),{token});}
+export function getChasterSettings(token){return chasterRequest("/settings",{token});}
+export function getPermissionDefinitions(token){return chasterRequest("/permissions/definitions",{token});}
 export function updateLockTime(lockId,duration,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/update-time",{token,method:"POST",body:{duration}});}
