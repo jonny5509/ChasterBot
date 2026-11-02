@@ -22,7 +22,7 @@ Independent Discord companion for Chaster using the official Public API.
 - Notification-channel configuration, member notification pause/resume and status, privacy-preserving admin delivery-queue counts, failed-delivery review and retry, notification-channel health diagnostics, six-hour-throttled server-owner alerts for terminal delivery failures, and admin audit command
 - Configurable Wearer/Keyholder role synchronization and role-gated commands
 - Mutual-consent private Discord session invitations using private threads
-- Private, tabbed `/dashboard` member panel with Overview, Roles, Sessions and Account views; live personal and keyheld Chaster locks with statuses and visible timers appear in Overview/Account. Manage Server users also get an Admin tab for configured roles and session-channel settings. Dashboard buttons are bound to the invoking member and refresh their private panel; the Sessions tab lets either participant archive a private session or cancel/decline a pending invitation, and shows a participant-only activity history for invitations and session lifecycle events. Temporary Chaster API failures are shown without breaking the dashboard
+- Private, tabbed `/dashboard` member panel with Overview, Roles, Sessions, Account and Commands views; the Commands directory lists registered slash commands grouped by feature and filters role-gated/admin commands against the member’s current configured roles and permissions. Manage Server users also get an Admin tab for configured roles and session-channel settings. Dashboard buttons are bound to the invoking member and refresh their private panel; the Sessions tab lets either participant archive a private session or cancel/decline a pending invitation, and shows a participant-only activity history for invitations and session lifecycle events. Temporary Chaster API failures are shown without breaking the dashboard
 
 ## Requirements
 - Node.js 20+
@@ -74,6 +74,9 @@ Official documentation:
 
 **Calendar and settings:**  
 /chaster-calendar, /calendar-event-add, /calendar-event-edit, /calendar-event-delete, /chaster-calendar-stats, /chaster-settings, /permission-catalog, /chaster-lock-stats-config, /chaster-community-categories
+
+**Dashboard command directory:**  
+Open `/dashboard` and select **Commands** to see commands grouped by feature. Wearer, Keyholder and server-admin entries are filtered using your current configured Discord role and permissions; commands remain enforced server-side when invoked.  
 
 **Community and administration:**  
 /profile, /leaderboard, /notifications, /notification-status, /notification-queue-status, /notification-health, /notification-failures, /notification-retry, /notify-channel, /challenge, /challenge-join, /challenge-approve, /award-points, /reward-add, /punishment-add, /reward-list, /punishment-list, /dice, /keyholder-chat, /audit, /configure-roles, /sync-roles, /session-channel, /session-invite, /help
