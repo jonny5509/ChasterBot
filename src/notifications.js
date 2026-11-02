@@ -1,5 +1,5 @@
 import {randomUUID} from "node:crypto";
-import {getAllLinkedAccounts,getGuildSettings,getOptedInUsers,getLockSnapshot,setLockSnapshot,enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,markDiscordNotificationFailed} from "./db.js";
+import {getAllLinkedAccounts,getGuildSettings,getOptedInUsers,getLockSnapshot,setLockSnapshot,enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,markDiscordNotificationFailed,pruneDiscordNotificationQueue} from "./db.js";
 import {getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks} from "./chaster.js";
 
@@ -57,6 +57,7 @@ export async function processPendingDiscordNotifications(client){
 }
 
 export function startDiscordNotificationWorker(client){
+  pruneDiscordNotificationQueue();
   const run=()=>processPendingDiscordNotifications(client).catch(e=>console.warn("Notification queue worker failed:",e.message));
   run();
   const timer=setInterval(run,10000);
