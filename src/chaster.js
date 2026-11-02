@@ -13,3 +13,10 @@ export function getKeyholderNotes(lockId,token){return chasterRequest("/keyholde
 export function getChasterSettings(token){return chasterRequest("/settings",{token});}
 export function getPermissionDefinitions(token){return chasterRequest("/permissions/definitions",{token});}
 export function updateLockTime(lockId,duration,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/update-time",{token,method:"POST",body:{duration}});}
+
+export function getUserProfileOverview(username,token){return chasterRequest("/user-profile/"+encodeURIComponent(username)+"/overview",{token});}
+export function getUserProfileStatistics(username,token){return chasterRequest("/user-profile/"+encodeURIComponent(username)+"/statistics",{token});}
+export function getUserAchievements(userId,token){return chasterRequest("/achievements/user/"+encodeURIComponent(userId),{token});}
+export function getUserBadgeCount(token){return chasterRequest("/users/badge/count",{token});}
+export function getLockHistory(lockId,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/history",{token,method:"POST",body:{}});}
+export function getKeyholderApplications(lockId,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/keyholder-applications",{token});}
