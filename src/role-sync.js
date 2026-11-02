@@ -1,0 +1,66 @@
+import {getRoleSettings,getAllLinkedAccounts,audit} from "./db.js";
+import {getTokensForDiscordUser} from "./oauth.js";
+import {getMyLocks,getKeyholderLocks} from "./chaster.js";
+
+function rows(value){
+  if(Array.isArray(value))return value;
+  if(Array.isArray(value?.locks))return value.locks;
+  if(Array.isArray(value?.items))return value.items;
+  if(Array.isArray(value?.data))return value.data;
+  if(Array.isArray(value?.results))return value.results;
+  return [];
+}
+function active(lock){
+  const status=String(lock?.status||"").toLowerCase();
+  return status==="locked"||status==="active";
+}
+async function applyRole(guild,member,roleId,shouldHave){
+  if(!roleId)return "not-configured";
+  const role=await guild.roles.fetch(roleId).catch(()=>null);
+  if(!role)return "missing-role";
+  if(!role.editable)return "role-hierarchy";
+  const has=member.roles.cache.has(roleId);
+  if(shouldHave&&!has){await member.roles.add(role,"Chaster role sync");return "added";}
+  if(!shouldHave&&has){await member.roles.remove(role,"Chaster role sync");return "removed";}
+  return "unchanged";
+}
+export async function syncUserRoles(client,discordId){
+  const account=getAllLinkedAccounts().find(x=>x.discord_id===discordId);
+  if(!account)throw new Error("Link your Chaster account first with /link-chaster.");
+  const tokens=await getTokensForDiscordUser(discordId);
+  const [ownRaw,keyholderRaw]=await Promise.all([getMyLocks(tokens.access_token),getKeyholderLocks(tokens.access_token)]);
+  const wearer=rows(ownRaw).some(active);
+  const keyholder=rows(keyholderRaw).length>0;
+  const settings=getRoleSettings();
+  let changed=0,servers=0;
+  for(const s of settings){
+    if(!s.wearer_role_id&&!s.keyholder_role_id)continue;
+    const guild=await client.guilds.fetch(s.guild_id).catch(()=>null);
+    if(!guild)continue;
+    const member=await guild.members.fetch(discordId).catch(()=>null);
+    if(!member)continue;
+    servers++;
+    const a=await applyRole(guild,member,s.wearer_role_id,wearer);
+    const b=await applyRole(guild,member,s.keyholder_role_id,keyholder);
+    if(a==="added"||a==="removed")changed++;
+    if(b==="added"||b==="removed")changed++;
+    if(a==="missing-role"||b==="missing-role"||a==="role-hierarchy"||b==="role-hierarchy")audit(guild.id,discordId,"role_sync_warning","Check role IDs and bot role hierarchy.");
+    else audit(guild.id,discordId,"role_sync","wearer="+wearer+", keyholder="+keyholder+", changed="+changed);
+  }
+  return {wearer,keyholder,servers,changed,message:"Chaster roles synced.\nWearer: "+(wearer?"active lock detected":"no active wearer lock detected")+"\nKeyholder: "+(keyholder?"active keyholder locks detected":"no active keyholder locks detected")+"\nServers checked: "+servers+" · role changes: "+changed};
+}
+export function startRoleSyncPolling(client){
+  let busy=false;
+  const run=async()=>{
+    if(busy)return;
+    busy=true;
+    try{
+      for(const account of getAllLinkedAccounts()){
+        try{await syncUserRoles(client,account.discord_id);}
+        catch(e){console.warn("Role sync skipped for linked account:",e.message);}
+      }
+    }finally{busy=false;}
+  };
+  setTimeout(run,30000);
+  setInterval(run,600000);
+}
