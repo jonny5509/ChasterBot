@@ -1,7 +1,7 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType} from "discord.js";
 import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
-import {getMyLocks,getKeyholderLocks,updateLockTime} from "./chaster.js";
+import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
 import {randomUUID} from "node:crypto";
 import {syncUserRoles} from "./role-sync.js";
@@ -14,6 +14,11 @@ new SlashCommandBuilder().setName("profile").setDescription("Show your profile a
 new SlashCommandBuilder().setName("leaderboard").setDescription("Show the community leaderboard."),
 new SlashCommandBuilder().setName("lock-status").setDescription("Show your Chaster locks and timers."),
 new SlashCommandBuilder().setName("keyholder-locks").setDescription("List locks you keyhold."),
+new SlashCommandBuilder().setName("chaster-profile").setDescription("Show your Chaster account profile."),
+new SlashCommandBuilder().setName("shared-locks").setDescription("List your Chaster shared locks."),
+new SlashCommandBuilder().setName("chaster-conversations").setDescription("List your Chaster private conversations."),
+new SlashCommandBuilder().setName("chaster-calendar").setDescription("Show your Chaster calendar events."),
+new SlashCommandBuilder().setName("chaster-notifications").setDescription("Show your Chaster notification counts."),
 new SlashCommandBuilder().setName("time-change").setDescription("Propose a verified keyholder time change.").addStringOption(o=>o.setName("lock_id").setDescription("Chaster lock ID").setRequired(true)).addIntegerOption(o=>o.setName("seconds").setDescription("Positive adds; negative removes (max 24h)").setRequired(true).setMinValue(-86400).setMaxValue(86400)).addStringOption(o=>o.setName("reason").setDescription("Audit reason").setRequired(true).setMaxLength(160)),
 new SlashCommandBuilder().setName("notifications").setDescription("Opt in or out of lock updates.").addBooleanOption(o=>o.setName("enabled").setDescription("Receive updates in this server").setRequired(true)),
 new SlashCommandBuilder().setName("notify-channel").setDescription("Set the server notification channel.").addChannelOption(o=>o.setName("channel").setDescription("Text channel").setRequired(true)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
@@ -48,6 +53,16 @@ if(n==="link-chaster")return i.reply({ephemeral:true,content:"Authorize Chaster 
 if(n==="unlink-chaster"){deleteLinkedAccount(i.user.id);return i.reply({ephemeral:true,content:"Your saved Chaster connection and local lock snapshots have been deleted."});}
 if(n==="profile"){const p=ensureProfile(i.user);return i.reply({ephemeral:true,content:"**"+p.display_name+"**\nPoints: **"+p.points+"**\nChaster: "+(getLinkedAccount(i.user.id)?"linked":"not linked")});}
 if(n==="leaderboard"){const a=leaderboard(10);return i.reply(a.length?"**Community leaderboard**\n"+a.map((x,k)=>(k+1)+". **"+x.display_name+"** — "+x.points+" pts").join("\n"):"No profiles yet.");}
+if(n==="chaster-profile"||n==="shared-locks"||n==="chaster-conversations"||n==="chaster-calendar"||n==="chaster-notifications"){
+await i.deferReply({ephemeral:true});
+const token=await accessToken(i.user.id);
+const list=(raw,...keys)=>Array.isArray(raw)?raw:keys.map(k=>raw?.[k]).find(Array.isArray)||[];
+if(n==="chaster-profile"){const p=await getCurrentProfile(token);return i.editReply("**Chaster profile**\nUsername: "+String(p.username||"Unavailable")+"\nUser ID: "+String(p.id||p._id||"unknown"));}
+if(n==="shared-locks"){const raw=await getSharedLocks(token),a=list(raw,"items","locks","sharedLocks","data");return i.editReply(a.length?"**Your shared locks**\n"+a.slice(0,15).map(x=>"• **"+String(x.title||x.name||"Shared lock").slice(0,65)+"** · "+String(x.status||"unknown")+" · ID: "+String(x._id||x.id||"unknown")).join("\n"):"No shared locks returned.");}
+if(n==="chaster-conversations"){const raw=await getConversations(token),a=list(raw,"items","conversations","data");return i.editReply(a.length?"**Your Chaster conversations**\n"+a.slice(0,15).map(x=>"• "+String(x.title||x.name||x.user?.username||x.participant?.username||"Conversation").slice(0,75)+" · ID: "+String(x._id||x.id||"unknown")).join("\n"):"No conversations returned.");}
+if(n==="chaster-calendar"){const raw=await getCalendarEvents(token),a=list(raw,"items","events","data");return i.editReply(a.length?"**Your Chaster calendar**\n"+a.slice(0,15).map(x=>"• **"+String(x.title||x.name||x.type||"Event").slice(0,65)+"** · "+String(x.startDate||x.start||x.date||"date unavailable")).join("\n"):"No calendar events returned.");}
+const raw=await getNotificationCounts(token);return i.editReply("**Chaster notification counts**\n"+JSON.stringify(raw).slice(0,1400));
+}
 if(n==="lock-status"||n==="keyholder-locks"){await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=n==="lock-status"?await getMyLocks(token):await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);return i.editReply(a.length?(n==="lock-status"?"**Your Chaster locks**\n":"**Locks you keyhold**\n")+a.slice(0,15).map(lockLine).join("\n"):"No locks returned for this account.");}
 if(n==="time-change"){const lockId=i.options.getString("lock_id",true),seconds=i.options.getInteger("seconds",true),reason=i.options.getString("reason",true);if(!seconds)return i.reply({ephemeral:true,content:"Seconds must be non-zero."});await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===lockId);if(!lock)return i.editReply("That lock is not in your Chaster keyholder lock list. No change made.");if(lock.trusted!==true||lock.role!=="keyholder")return i.editReply("Chaster did not confirm a trusted keyholder role for this lock. No change made.");const nonce=randomUUID();pending.set(nonce,{user:i.user.id,lockId,seconds,reason,guildId:i.guildId,created:Date.now()});const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("tc:"+nonce).setLabel("Confirm time change").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("tx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));return i.editReply({content:"**Confirm Chaster time change**\n"+String(lock.title||lockId)+"\n"+(seconds>0?"Add ":"Remove ")+Math.abs(seconds)+" seconds\nReason: "+reason+"\nNo change occurs unless you press Confirm.",components:[row]});}
 if(n==="notifications"){const on=i.options.getBoolean("enabled",true);setNotificationOptIn(i.guildId,i.user.id,on);return i.reply({ephemeral:true,content:on?"You opted in to lock updates in this server.":"You opted out of lock updates in this server."});}
