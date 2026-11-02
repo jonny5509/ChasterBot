@@ -27,3 +27,10 @@ export function getSharedLockFavorite(sharedLockId,token){return chasterRequest(
 export function getNotificationChannelHealth(token){return chasterRequest("/notifications/channels/health",{token});}
 export function markNotificationRead(notificationId,token){return chasterRequest("/notifications/"+encodeURIComponent(notificationId)+"/read",{token,method:"POST"});}
 export function markAllNotificationsRead(token){return chasterRequest("/notifications/read-all",{token,method:"POST"});}
+
+export function getSharedLockDetails(sharedLockId,token){return chasterRequest("/shared-locks/"+encodeURIComponent(sharedLockId),{token});}
+export function getSharedLockTags(token){return chasterRequest("/shared-lock-tags",{token});}
+export function getExtensions(token){return chasterRequest("/extensions",{token});}
+export function getExploreCategories(token){return chasterRequest("/explore/categories",{token});}
+export function getCalendarStatistics(token){return chasterRequest("/user-profile/calendar-statistics",{token});}
+export function getBlockedUsers(token){return chasterRequest("/blocks",{token});}
