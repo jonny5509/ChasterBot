@@ -7,6 +7,7 @@ import {randomUUID} from "node:crypto";
 import {syncUserRoles} from "./role-sync.js";
 import {consumeConfirmation} from "./confirmations.js";
 import {isOwnedResourceListed} from "./owned-resources.js";
+import {getDashboardCommandGroups} from "./dashboard-commands.js";
 const pending=new Map();
 export const commands=[
 new SlashCommandBuilder().setName("help").setDescription("Show bot commands."),
@@ -123,32 +124,13 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const eventLabel=(event,actor,other)=>({invited:"<@"+actor+"> invited <@"+other+">",accepted:"<@"+actor+"> accepted <@"+other+">’s invitation",declined:"<@"+actor+"> declined <@"+other+">’s invitation",cancelled:"<@"+actor+"> cancelled an invitation to <@"+other+">",created:"Private session created for <@"+actor+"> and <@"+other+">",closed:"<@"+actor+"> closed the private session with <@"+other+">"}[event]||"Session activity");
   const activityText=activity.length?"\n\n**Recent activity**\n"+activity.map(entry=>"• "+eventLabel(entry.event,entry.actor_id,entry.other_id)+" · <t:"+Math.floor(entry.created_at/1000)+":R>").join("\n"):"\n\nNo session activity yet.";
   const sessionText="**Your private sessions**\n"+(sessions.length?sessions.join("\n"):"No active private sessions found")+(invites.length?"\n\n**Pending invitations**\n"+invites.join("\n"):"\n\nNo pending invitations.")+activityText;
-  const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured")+"\n\nManage with /configure-roles and /session-channel.";
-  const commandGroups=[
-    ["General",["help","dashboard","profile","leaderboard","dice","keyholder-chat","reward-list","punishment-list"]],
-    ["Account and locks",["link-chaster","chaster-link-status","unlink-chaster","lock-status","keyholder-locks","lock-details","lock-seal","lock-history","time-change","keyholder-notes","keyholder-notes-delete","keyholder-applications"]],
-    ["Profiles and discovery",["chaster-profile","chaster-user-overview","chaster-user-stats","chaster-achievements","chaster-badges","chaster-achievement-categories","chaster-public-locks","shared-locks","shared-lock-details","shared-lock-tags","shared-lock-favorite","shared-lock-favorite-add","shared-lock-favorite-remove","shared-lock-archive","chaster-extensions","chaster-explore-categories","chaster-settings","permission-catalog","chaster-lock-stats-config","chaster-community-categories"]],
-    ["Messaging and notifications",["chaster-conversations","chaster-conversation","chaster-messages","chaster-ignored-users","chaster-blocks","chaster-notifications","chaster-notification-health","chaster-notification-read","chaster-notifications-read-all","notifications","notification-status"]],
-    ["Calendar",["chaster-calendar","chaster-calendar-stats","calendar-event-add","calendar-event-edit","calendar-event-delete"]],
-    ["Community",["challenge","challenge-join","reward-add","punishment-add"]],
-    ["Roles and sessions",["configure-roles","sync-roles","session-channel","session-invite"]],
-    ["Server administration",["notification-queue-status","notification-health","notification-failures","notification-history","notification-report","notification-retention","notification-retry","notify-channel","challenge-approve","award-points","audit"]]
-  ];
-  const wearerOnly=new Set(["lock-status","keyholder-applications"]);
-  const keyholderOnly=new Set(["keyholder-locks","time-change","keyholder-notes","keyholder-notes-delete"]);
-  const adminOnly=new Set(["configure-roles","session-channel","notification-queue-status","notification-health","notification-failures","notification-history","notification-report","notification-retention","notification-retry","notify-channel","challenge-approve","award-points","audit"]);
-  const canManageRoles=member.permissions.has(PermissionFlagsBits.ManageRoles);
-  const canManageGuild=member.permissions.has(PermissionFlagsBits.ManageGuild);
-  const commandByName=new Map(commands.map(command=>{const data=command.toJSON();return [data.name,data];}));
-  const commandDirectory=commandGroups.map(([heading,names])=>{
-    const visible=names.filter(name=>{
-      if(!commandByName.has(name))return false;
-      if(wearerOnly.has(name)&&(!settings.wearer_role_id||!member.roles.cache.has(settings.wearer_role_id)))return false;
-      if(keyholderOnly.has(name)&&(!settings.keyholder_role_id||!member.roles.cache.has(settings.keyholder_role_id)))return false;
-      if(adminOnly.has(name)&&(name==="configure-roles"?!canManageRoles:!canManageGuild))return false;
-      return true;
-    });
-    return visible.length?"**"+heading+"**\n"+visible.map(name=>"`/"+name+"`").join(" · "):"";
+  const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not conf  const commandDirectory=getDashboardCommandGroups(commands.map(command=>command.toJSON().name),{
+    hasWearerRole:Boolean(settings.wearer_role_id&&member.roles.cache.has(settings.wearer_role_id)),
+    hasKeyholderRole:Boolean(settings.keyholder_role_id&&member.roles.cache.has(settings.keyholder_role_id)),
+    canManageGuild:member.permissions.has(PermissionFlagsBits.ManageGuild),
+    canManageRoles:member.permissions.has(PermissionFlagsBits.ManageRoles)
+  }).map(group=>"**"+group.heading+"**\\n"+group.commands.map(name=>"`/"+name+"`").join(" · ")).join("\\n\\n");
+>"`/"+name+"`").join(" · "):"";
   }).filter(Boolean).join("\n\n");
   let body;
   if(tab==="roles")body=roles;
