@@ -44,3 +44,5 @@ export function getPublicLocks(userId,token){return chasterRequest("/locks/user/
 export function createCalendarEvent(data,token){return chasterRequest("/calendar/events",{token,method:"POST",body:data});}
 export function updateCalendarEvent(eventId,data,token){return chasterRequest("/calendar/events/"+encodeURIComponent(eventId),{token,method:"PATCH",body:data});}
 export function deleteCalendarEvent(eventId,token){return chasterRequest("/calendar/events/"+encodeURIComponent(eventId),{token,method:"DELETE"});}
+
+export function archiveSharedLock(sharedLockId,token){return chasterRequest("/shared-locks/"+encodeURIComponent(sharedLockId)+"/archive",{token,method:"POST"});}
