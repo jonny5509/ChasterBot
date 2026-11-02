@@ -54,13 +54,14 @@ export function setSessionChannel(g,c,a){db.prepare("INSERT INTO guild_settings(
 export function getSessionChannel(g){return db.prepare("SELECT session_channel_id FROM guild_settings WHERE guild_id=?").get(g)?.session_channel_id??null;}
 export function createSessionInvite(id,g,c,from,to,expires){db.prepare("INSERT INTO session_invites(id,guild_id,channel_id,inviter_id,invitee_id,expires_at) VALUES (?,?,?,?,?,?)").run(id,g,c,from,to,expires);}
 export function consumeSessionInvite(id){const x=db.prepare("SELECT * FROM session_invites WHERE id=?").get(id);db.prepare("DELETE FROM session_invites WHERE id=?").run(id);return x&&x.expires_at>Date.now()?x:null;}
+export function deleteSessionInvite(id,guildId,discordId){return db.prepare("DELETE FROM session_invites WHERE id=? AND guild_id=? AND (inviter_id=? OR invitee_id=?)").run(String(id),String(guildId),String(discordId),String(discordId)).changes>0;}
 export function recordPrivateSession(id,guildId,threadId,inviterId,inviteeId){
   db.prepare("INSERT INTO private_sessions(id,guild_id,thread_id,inviter_id,invitee_id,created_at) VALUES (?,?,?,?,?,?)").run(String(id),String(guildId),String(threadId),String(inviterId),String(inviteeId),Date.now());
 }
 export function getMemberSessionDashboard(guildId,discordId){
   const id=String(discordId),guild=String(guildId);
   const sessions=db.prepare("SELECT thread_id,inviter_id,invitee_id,created_at FROM private_sessions WHERE guild_id=? AND (inviter_id=? OR invitee_id=?) ORDER BY created_at DESC LIMIT 5").all(guild,id,id);
-  const invites=db.prepare("SELECT inviter_id,invitee_id,expires_at FROM session_invites WHERE guild_id=? AND expires_at>? AND (inviter_id=? OR invitee_id=?) ORDER BY expires_at LIMIT 5").all(guild,Date.now(),id,id);
+  const invites=db.prepare("SELECT id,inviter_id,invitee_id,expires_at FROM session_invites WHERE guild_id=? AND expires_at>? AND (inviter_id=? OR invitee_id=?) ORDER BY expires_at LIMIT 5").all(guild,Date.now(),id,id);
   return {sessions,invites};
 }
 export function getGuildRoleSettings(guildId){
