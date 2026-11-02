@@ -1,20 +1,12 @@
 import "dotenv/config";
-import { Client, Events, GatewayIntentBits } from "discord.js";
-import { handleCommand } from "./commands.js";
-
-if (!process.env.DISCORD_TOKEN) throw new Error("Missing DISCORD_TOKEN in .env");
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
-
-client.once(Events.ClientReady, c => console.log("Logged in as " + c.user.tag));
-client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-  try {
-    await handleCommand(interaction);
-  } catch (error) {
-    console.error("Command failed:", error?.message ?? "unknown error");
-    const payload = { content: "The command failed. Check the bot logs; secrets are never shown here.", ephemeral: true };
-    if (interaction.replied || interaction.deferred) await interaction.followUp(payload).catch(() => {});
-    else await interaction.reply(payload).catch(() => {});
-  }
-});
+import crypto from "node:crypto";
+import {Client,Events,GatewayIntentBits} from "discord.js";
+import {handleCommand,handleButton} from "./commands.js";
+import {startOAuthServer} from "./oauth.js";
+import {startNotificationPolling} from "./notifications.js";
+globalThis.crypto=globalThis.crypto||crypto.webcrypto;
+if(!process.env.DISCORD_TOKEN)throw new Error("Missing DISCORD_TOKEN in .env");
+const client=new Client({intents:[GatewayIntentBits.Guilds]});
+client.once(Events.ClientReady,c=>{console.log("Logged in as "+c.user.tag);startOAuthServer(client);startNotificationPolling(client);});
+client.on(Events.InteractionCreate,async i=>{try{if(i.isChatInputCommand())await handleCommand(i);else if(i.isButton())await handleButton(i);}catch(e){console.error("Interaction failed:",e?.message||"unknown error");const p={content:"The command failed. Check bot logs; secrets are never shown here.",ephemeral:true};if(i.replied||i.deferred)await i.followUp(p).catch(()=>{});else await i.reply(p).catch(()=>{});}});
 client.login(process.env.DISCORD_TOKEN);
