@@ -99,6 +99,10 @@ export function getNotificationChannel(guildId){
 }
 
 
+export function getDiscordNotificationHistory(guildId,limit=10){
+  return db.prepare("SELECT q.id,q.status,q.attempts,q.created_at,q.sent_at,q.last_error FROM discord_notification_queue q JOIN guild_settings g ON g.notification_channel_id=q.target_id WHERE q.destination_type='channel' AND g.guild_id=? ORDER BY q.id DESC LIMIT ?").all(String(guildId),Math.max(1,Math.min(20,limit)));
+}
+
 export function getFailedDiscordNotifications(guildId,limit=5){
   return db.prepare("SELECT q.id,q.attempts,q.last_error,q.created_at FROM discord_notification_queue q JOIN guild_settings g ON g.notification_channel_id=q.target_id WHERE q.destination_type='channel' AND q.status='failed' AND g.guild_id=? ORDER BY q.id DESC LIMIT ?").all(String(guildId),Math.max(1,Math.min(20,limit)));
 }
