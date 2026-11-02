@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS notification_optins(guild_id TEXT NOT NULL,discord_id
 CREATE TABLE IF NOT EXISTS lock_snapshots(discord_id TEXT NOT NULL,lock_id TEXT NOT NULL,fingerprint TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(discord_id,lock_id));
 CREATE TABLE IF NOT EXISTS reward_items(id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id TEXT NOT NULL,kind TEXT NOT NULL CHECK(kind IN ('reward','punishment')),title TEXT NOT NULL,description TEXT NOT NULL,created_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS session_invites(id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,channel_id TEXT NOT NULL,inviter_id TEXT NOT NULL,invitee_id TEXT NOT NULL,expires_at INTEGER NOT NULL);\nCREATE TABLE IF NOT EXISTS discord_notification_queue(id INTEGER PRIMARY KEY AUTOINCREMENT,dedupe_key TEXT NOT NULL UNIQUE,destination_type TEXT NOT NULL CHECK(destination_type IN ('user','channel')),target_id TEXT NOT NULL,content TEXT NOT NULL,allowed_mentions TEXT NOT NULL DEFAULT '{}',status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','sent','failed')),attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at INTEGER NOT NULL DEFAULT 0,last_error TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL,sent_at INTEGER);\nCREATE INDEX IF NOT EXISTS idx_notification_queue_due ON discord_notification_queue(status,next_attempt_at,id);
+CREATE TABLE IF NOT EXISTS notification_admin_alerts(guild_id TEXT PRIMARY KEY,last_alert_at INTEGER NOT NULL);
 `);
 for (const sql of ["ALTER TABLE guild_settings ADD COLUMN wearer_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN keyholder_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN session_channel_id TEXT"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes("duplicate column")) throw e; } }
 export function ensureProfile(user){db.prepare("INSERT INTO profiles(discord_id,display_name) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET display_name=excluded.display_name").run(user.id,user.username);return db.prepare("SELECT * FROM profiles WHERE discord_id=?").get(user.id);}
@@ -100,4 +101,15 @@ export function getFailedDiscordNotifications(guildId,limit=5){
 export function retryFailedDiscordNotification(id,guildId){
   const result=db.prepare("UPDATE discord_notification_queue SET status='pending',attempts=0,next_attempt_at=?,last_error='' WHERE id=? AND status='failed' AND destination_type='channel' AND EXISTS (SELECT 1 FROM guild_settings g WHERE g.guild_id=? AND g.notification_channel_id=discord_notification_queue.target_id)").run(Date.now(),id,String(guildId));
   return result.changes===1;
+}
+
+
+export function getGuildForNotificationChannel(channelId){
+  return db.prepare("SELECT guild_id FROM guild_settings WHERE notification_channel_id=? LIMIT 1").get(String(channelId))?.guild_id??null;
+}
+export function claimNotificationAdminAlert(guildId,now=Date.now(),cooldownMs=6*60*60*1000){
+  const row=db.prepare("SELECT last_alert_at FROM notification_admin_alerts WHERE guild_id=?").get(String(guildId));
+  if(row&&now-row.last_alert_at<cooldownMs)return false;
+  db.prepare("INSERT INTO notification_admin_alerts(guild_id,last_alert_at) VALUES (?,?) ON CONFLICT(guild_id) DO UPDATE SET last_alert_at=excluded.last_alert_at").run(String(guildId),now);
+  return true;
 }
