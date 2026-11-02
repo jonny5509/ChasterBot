@@ -83,3 +83,11 @@ export function pruneDiscordNotificationQueue(now=Date.now()){
   const sentBefore=now-30*86400000,failedBefore=now-90*86400000;
   return db.prepare("DELETE FROM discord_notification_queue WHERE (status='sent' AND sent_at<?) OR (status='failed' AND created_at<?)").run(sentBefore,failedBefore).changes;
 }
+
+export function getNotificationPreference(guildId,discordId){
+  const row=db.prepare("SELECT enabled FROM notification_optins WHERE guild_id=? AND discord_id=?").get(guildId,discordId);
+  return row?Boolean(row.enabled):false;
+}
+export function getNotificationChannel(guildId){
+  return db.prepare("SELECT notification_channel_id FROM guild_settings WHERE guild_id=?").get(guildId)?.notification_channel_id??null;
+}
