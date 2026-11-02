@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getNotificationRetentionDays,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -141,4 +141,35 @@ test("notification retention is configurable per server and cleanup preserves pe
   const history=getDiscordNotificationHistory(guild,20);
   assert.equal(history.some(x=>x.id===sent.id),false);
   assert.equal(history.some(x=>x.status==="pending"),true);
+});
+
+
+test("notification delivery report is time-windowed and scoped to its server",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="notification-report-guild-"+suffix;
+  const otherGuild=guild+"-other";
+  const channel="notification-report-channel-"+suffix;
+  setNotificationChannel(guild,channel,"test-admin");
+  const sentKey="notification-report-sent:"+suffix;
+  const failedKey="notification-report-failed:"+suffix;
+  const pendingKey="notification-report-pending:"+suffix;
+  for(const key of [sentKey,failedKey,pendingKey]){
+    assert.equal(enqueueDiscordNotification({dedupeKey:key,destinationType:"channel",targetId:channel,content:"PRIVATE REPORT CONTENT"}),true);
+  }
+  const queued=getDueDiscordNotifications(100);
+  const sent=queued.find(x=>x.dedupe_key===sentKey);
+  const failed=queued.find(x=>x.dedupe_key===failedKey);
+  markDiscordNotificationSent(sent.id);
+  markDiscordNotificationFailed(failed.id,"Missing Permissions",{retryAt:null});
+  const report=getDiscordNotificationDeliveryReport(guild,7,Date.now()+1000);
+  assert.equal(report.sent,1);
+  assert.equal(report.failed,1);
+  assert.equal(report.pending,1);
+  assert.equal(report.completed,2);
+  assert.equal(report.successRate,50);
+  assert.equal(report.averageAttempts,0.5);
+  const other=getDiscordNotificationDeliveryReport(otherGuild,7);
+  assert.equal(other.completed,0);
+  assert.equal(other.successRate,null);
+  assert.throws(()=>getDiscordNotificationDeliveryReport(guild,14),/7, 30, or 90/);
 });
