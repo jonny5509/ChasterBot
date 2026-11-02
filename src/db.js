@@ -92,3 +92,12 @@ export function getNotificationPreference(guildId,discordId){
 export function getNotificationChannel(guildId){
   return db.prepare("SELECT notification_channel_id FROM guild_settings WHERE guild_id=?").get(guildId)?.notification_channel_id??null;
 }
+
+
+export function getFailedDiscordNotifications(guildId,limit=5){
+  return db.prepare("SELECT q.id,q.attempts,q.last_error,q.created_at FROM discord_notification_queue q JOIN guild_settings g ON g.notification_channel_id=q.target_id WHERE q.destination_type='channel' AND q.status='failed' AND g.guild_id=? ORDER BY q.id DESC LIMIT ?").all(String(guildId),Math.max(1,Math.min(20,limit)));
+}
+export function retryFailedDiscordNotification(id,guildId){
+  const result=db.prepare("UPDATE discord_notification_queue SET status='pending',attempts=0,next_attempt_at=?,last_error='' WHERE id=? AND status='failed' AND destination_type='channel' AND EXISTS (SELECT 1 FROM guild_settings g WHERE g.guild_id=? AND g.notification_channel_id=discord_notification_queue.target_id)").run(Date.now(),id,String(guildId));
+  return result.changes===1;
+}
