@@ -8,6 +8,7 @@ Independent Discord companion for Chaster using the official Public API.
 - AES-256-GCM encrypted OAuth token storage in SQLite
 - Personal lock status, keyholder lock listing and Chaster profile
 - Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views
+- Calendar lock-period event creation, editing and confirmation-protected deletion
 - Shared-lock details and tags, extension catalogue, Explore categories, calendar statistics, blocked-user and ignored-user lists
 - Achievement and community-event categories, lock-statistics reset configuration, API health, public user locks and profile completeness
 - Notification read and read-all actions
@@ -54,6 +55,7 @@ Official documentation:
 /shared-lock-details, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
 /chaster-achievement-categories, /chaster-ignored-users, /chaster-lock-stats-config, /chaster-community-categories, /chaster-api-health
 /chaster-public-locks, /chaster-profile-completeness
+/calendar-event-add, /calendar-event-edit, /calendar-event-delete
 /notifications, /notify-channel, /profile, /leaderboard, /award-points
 /challenge, /challenge-join, /challenge-approve
 /reward-add, /punishment-add, /reward-list, /punishment-list
@@ -87,4 +89,4 @@ Discord does not support dynamically hiding individual slash commands based on a
 
 
 ## Chaster API coverage roadmap
-This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder/shared locks, conversations, calendar, notification counts/read actions/channel health, conversation messages, shared-lock details/tags/favorite status, extension and Explore catalogues, calendar statistics, blocked users, lock details/seals/history, keyholder notes/applications, app settings, permission definitions, user overviews/statistics, achievements and badge counts. Remaining endpoint families are being added in separate reviewed batches: lock/shared-lock writes, messaging actions, notification actions, calendar writes, profile/user tools, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
+This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder/shared locks, conversations, calendar, notification counts/read actions/channel health, conversation messages, shared-lock details/tags/favorite status, extension and Explore catalogues, calendar statistics, blocked users, lock details/seals/history, keyholder notes/applications, app settings, permission definitions, user overviews/statistics, achievements and badge counts. Remaining endpoint families are being added in separate reviewed batches: shared-lock writes, keyholder-note writes, messaging actions, notification actions, profile/user tools, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
