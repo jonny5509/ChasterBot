@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -97,4 +97,25 @@ test("terminal channel failures can pause delivery until an administrator reconf
   setNotificationChannel(guild,replacement,"test-admin");
   assert.equal(getNotificationChannelPause(guild),null);
   assert.equal(isNotificationChannelPaused(guild,replacement),false);
+});
+
+
+test("notification history is scoped to the server and omits message and destination details",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="notification-history-guild-"+suffix;
+  const otherGuild=guild+"-other";
+  const channel="notification-history-channel-"+suffix;
+  setNotificationChannel(guild,channel,"test-admin");
+  const key="notification-history:"+suffix;
+  assert.equal(enqueueDiscordNotification({dedupeKey:key,destinationType:"channel",targetId:channel,content:"PRIVATE BODY"}),true);
+  const queued=getDueDiscordNotifications(100).find(x=>x.dedupe_key===key);
+  assert.ok(queued);
+  markDiscordNotificationSent(queued.id);
+  const history=getDiscordNotificationHistory(guild,10);
+  const row=history.find(x=>x.id===queued.id);
+  assert.ok(row);
+  assert.equal(row.status,"sent");
+  assert.equal(Object.hasOwn(row,"content"),false);
+  assert.equal(Object.hasOwn(row,"target_id"),false);
+  assert.equal(getDiscordNotificationHistory(otherGuild,10).some(x=>x.id===queued.id),false);
 });
