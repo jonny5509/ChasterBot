@@ -14,7 +14,7 @@ export function notificationRetryDelay(attempts){
   return Math.min(MAX_RETRY_MS,BASE_RETRY_MS*2**Math.max(0,attempts));
 }
 export function isPermanentDiscordDeliveryError(error){
-  return [403,404].includes(Number(error?.status))||[10003,10007,10013,50001,50007].includes(Number(error?.code));
+  return [403,404].includes(Number(error?.status))||[10003,10007,10013,50001,50007,50013].includes(Number(error?.code));
 }
 export function enqueueChasterReauthNotification(discordId){
   return enqueueDiscordNotification({
