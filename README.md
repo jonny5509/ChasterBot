@@ -7,7 +7,7 @@ Independent Discord companion for Chaster using the official Public API.
 - OAuth 2 authorization-code exchange and refresh-token flow
 - AES-256-GCM encrypted OAuth token storage in SQLite
 - Personal lock status, keyholder lock listing and Chaster profile
-- Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views\n- Notification read and read-all actions
+- Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views\n- Shared-lock details and tags, extension catalogue, Explore categories, calendar statistics and blocked-user list\n- Notification read and read-all actions
 - Read-only lock detail, lock seal, keyholder notes, application settings, permission catalogue, user overviews/statistics, achievements, badge counts, lock history and keyholder applications
 - Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
 - Opt-in lock-change notifications via five-minute polling
@@ -45,7 +45,7 @@ Official documentation:
 ## Commands
 /link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change
 /chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications
-/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog\n/chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications\n/chaster-conversation, /chaster-messages, /shared-lock-favorite, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all
+/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog\n/chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications\n/chaster-conversation, /chaster-messages, /shared-lock-favorite, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all\n/shared-lock-details, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
 /notifications, /notify-channel, /profile, /leaderboard, /award-points
 /challenge, /challenge-join, /challenge-approve
 /reward-add, /punishment-add, /reward-list, /punishment-list
@@ -79,4 +79,4 @@ Discord does not support dynamically hiding individual slash commands based on a
 
 
 ## Chaster API coverage roadmap
-This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder/shared locks, conversations, calendar, notification counts/read actions/channel health, conversation messages, shared-lock favorite status, lock details/seals/history, keyholder notes/applications, app settings, permission definitions, user overviews/statistics, achievements and badge counts. Remaining endpoint families are being added in separate reviewed batches: lock/shared-lock writes, messaging actions, notification actions, calendar writes, profile/user tools, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
+This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder/shared locks, conversations, calendar, notification counts/read actions/channel health, conversation messages, shared-lock details/tags/favorite status, extension and Explore catalogues, calendar statistics, blocked users, lock details/seals/history, keyholder notes/applications, app settings, permission definitions, user overviews/statistics, achievements and badge counts. Remaining endpoint families are being added in separate reviewed batches: lock/shared-lock writes, messaging actions, notification actions, calendar writes, profile/user tools, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
