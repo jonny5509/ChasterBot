@@ -7,10 +7,10 @@ Independent Discord companion for Chaster using the official Public API.
 - OAuth 2 authorization-code exchange and refresh-token flow
 - AES-256-GCM encrypted OAuth token storage in SQLite
 - Personal lock status, keyholder lock listing and Chaster profile
-- Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views; add/remove shared-lock favorites
+- Read-only shared-lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views; add/remove favorites and confirmation-protected shared-lock archiving
 - Calendar lock-period event creation, editing and confirmation-protected deletion
 - Shared-lock details and tags, extension catalogue, Explore categories, calendar statistics, blocked-user and ignored-user lists
-- Achievement and community-event categories, lock-statistics reset configuration, API health, public user locks and profile completeness
+- Achievement and community-event categories, lock-statistics reset configuration and public user locks
 - Notification read and read-all actions
 - Read-only lock detail, lock seal, keyholder notes, application settings, permission catalogue, user overviews/statistics, achievements, badge counts, lock history and keyholder applications
 - Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
@@ -19,6 +19,8 @@ Independent Discord companion for Chaster using the official Public API.
 - Configurable text-only reward and optional consequence ideas
 - Dice game and optional AI-compatible keyholder persona
 - Notification-channel configuration and admin audit command
+- Configurable Wearer/Keyholder role synchronization and role-gated commands
+- Mutual-consent private Discord session invitations using private threads
 
 ## Requirements
 - Node.js 20+
@@ -47,19 +49,21 @@ Official documentation:
 - https://api.chaster.app/api
 
 ## Commands
-/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change
-/chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications
-/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog
-/chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications
-/chaster-conversation, /chaster-messages, /shared-lock-favorite, /shared-lock-favorite-add, /shared-lock-favorite-remove, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all
-/shared-lock-details, /shared-lock-archive, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
-/chaster-achievement-categories, /chaster-ignored-users, /chaster-lock-stats-config, /chaster-community-categories, /chaster-api-health
-/chaster-public-locks, /chaster-profile-completeness
-/calendar-event-add, /calendar-event-edit, /calendar-event-delete
-/notifications, /notify-channel, /profile, /leaderboard, /award-points
-/challenge, /challenge-join, /challenge-approve
-/reward-add, /punishment-add, /reward-list, /punishment-list
-/dice, /keyholder-chat, /audit, /help
+
+**Account and locks:**  
+/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /lock-details, /lock-seal, /lock-history, /time-change, /keyholder-applications, /keyholder-notes
+
+**Profiles and discovery:**  
+/chaster-profile, /chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /chaster-achievement-categories, /chaster-public-locks, /shared-locks, /shared-lock-details, /shared-lock-tags, /shared-lock-favorite, /shared-lock-favorite-add, /shared-lock-favorite-remove, /shared-lock-archive, /chaster-extensions, /chaster-explore-categories
+
+**Messaging and notifications:**  
+/chaster-conversations, /chaster-conversation, /chaster-messages, /chaster-ignored-users, /chaster-notifications, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all, /chaster-blocks
+
+**Calendar and settings:**  
+/chaster-calendar, /calendar-event-add, /calendar-event-edit, /calendar-event-delete, /chaster-calendar-stats, /chaster-settings, /permission-catalog, /chaster-lock-stats-config, /chaster-community-categories
+
+**Community and administration:**  
+/profile, /leaderboard, /notifications, /notify-channel, /challenge, /challenge-join, /challenge-approve, /award-points, /reward-add, /punishment-add, /reward-list, /punishment-list, /dice, /keyholder-chat, /audit, /configure-roles, /sync-roles, /session-channel, /session-invite, /help
 
 ## Safety and limitations
 - The bot never asks for Chaster passwords; users link through OAuth.
@@ -89,4 +93,4 @@ Discord does not support dynamically hiding individual slash commands based on a
 
 
 ## Chaster API coverage roadmap
-This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder/shared locks, conversations, calendar, notification counts/read actions/channel health, conversation messages, shared-lock details/tags/favorite status, extension and Explore catalogues, calendar statistics, blocked users, lock details/seals/history, keyholder notes/applications, app settings, permission definitions, user overviews/statistics, achievements and badge counts. Remaining endpoint families are being added in separate reviewed batches: shared-lock writes, keyholder-note writes, messaging actions, notification actions, profile/user tools, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
+This bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder/shared locks, conversations, calendar, notification counts/channel health, conversation messages, shared-lock details/tags/favorite status, extension and Explore catalogues, calendar statistics, blocked users, lock details/seals/history, keyholder notes/applications, app settings, permission definitions, user overviews/statistics, achievements and badge counts. Implemented write operations include keyholder time changes (with revalidation and confirmation), calendar event creation/editing/deletion, notification read actions, shared-lock favorite add/remove, and confirmation-protected shared-lock archiving. DTO-dependent operations such as shared-lock creation/editing, keyholder-note writes and messaging sends remain out of scope until their request schemas are verified against the current API specification. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.
