@@ -111,6 +111,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false){
 }
 export async function handleCommand(i){const n=i.commandName;
 if(n==="dashboard"){
+if(!i.guild)return i.reply({ephemeral:true,content:"Open the dashboard from a server."});
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 const content=await buildMemberDashboard(i.guild,i.user,admin);
 const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashboard:refresh").setLabel("Refresh dashboard").setStyle(ButtonStyle.Primary));
