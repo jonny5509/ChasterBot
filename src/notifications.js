@@ -1,5 +1,5 @@
 import {randomUUID} from "node:crypto";
-import {getAllLinkedAccounts,getGuildSettings,getOptedInUsers,getLockSnapshot,setLockSnapshot,enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,markDiscordNotificationFailed,pruneDiscordNotificationQueue,getGuildForNotificationChannel,claimNotificationAdminAlert} from "./db.js";
+import {getAllLinkedAccounts,getGuildSettings,getOptedInUsers,getLockSnapshot,setLockSnapshot,enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,markDiscordNotificationFailed,pruneDiscordNotificationQueue,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,isNotificationChannelPaused} from "./db.js";
 import {getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks} from "./chaster.js";
 
@@ -43,7 +43,7 @@ async function alertGuildOwnerOfNotificationFailure(client,item,error){
       dedupeKey:"notification-admin-alert:"+guildId+":"+randomUUID(),
       destinationType:"user",
       targetId:guild.ownerId,
-      content:"ChasterBot could not deliver a server notification. Reason: "+safeAdminFailureReason(error)+". Queue item ID: "+item.id+". In your server, run /notification-health and /notification-failures; use /notification-retry if appropriate. Alerts are limited to one per server every six hours."
+      content:"ChasterBot could not deliver a server notification. Reason: "+safeAdminFailureReason(error)+". Queue item ID: "+item.id+". In your server, run /notify-channel to select this channel again or choose a replacement, then use /notification-health and /notification-failures. Alerts are limited to one per server every six hours."
     });
   }catch(e){
     console.warn("Could not send notification failure alert:",e?.message||"unknown error");
@@ -75,7 +75,7 @@ export async function processPendingDiscordNotifications(client){
         const attempts=Number(item.attempts||0);
         const retryAt=permanent||attempts+1>=MAX_DELIVERY_ATTEMPTS?null:Date.now()+notificationRetryDelay(attempts);
         markDiscordNotificationFailed(item.id,error?.message||"Discord delivery failed",{retryAt,maxAttempts:MAX_DELIVERY_ATTEMPTS});
-        if(retryAt===null||attempts+1>=MAX_DELIVERY_ATTEMPTS){if(item.destination_type==="channel")await alertGuildOwnerOfNotificationFailure(client,item,error);}
+        if(retryAt===null||attempts+1>=MAX_DELIVERY_ATTEMPTS){if(item.destination_type==="channel"){const guildId=getGuildForNotificationChannel(item.target_id);if(guildId)pauseNotificationChannel(guildId,item.target_id,safeAdminFailureReason(error));await alertGuildOwnerOfNotificationFailure(client,item,error);}}
         console.warn("Discord notification delivery failed:",item.id,error?.message||"unknown error",permanent?"(permanent)":"");
       }
     }
@@ -100,7 +100,7 @@ export function startNotificationPolling(client){
     try{
       const settings=getGuildSettings();
       for(const acc of getAllLinkedAccounts()){
-        const subs=settings.filter(x=>getOptedInUsers(x.guild_id).includes(acc.discord_id));
+        const subs=settings.filter(x=>!isNotificationChannelPaused(x.guild_id,x.notification_channel_id)&&getOptedInUsers(x.guild_id).includes(acc.discord_id));
         if(!subs.length)continue;
         try{
           const t=await getTokensForDiscordUser(acc.discord_id);
