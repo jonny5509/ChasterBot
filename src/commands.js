@@ -87,7 +87,7 @@ new SlashCommandBuilder().setName("session-channel").setDescription("Set the par
 new SlashCommandBuilder().setName("session-invite").setDescription("Invite another linked Chaster member to a private bot-assisted session.").addUserOption(o=>o.setName("user").setDescription("The other participant").setRequired(true))
 ];
 function lockLine(l){const title=String(l.title||"Untitled lock").slice(0,70);let t="time hidden/unavailable";if(l.isAllowedToViewTime!==false&&l.endDate){const s=Math.max(0,Math.floor((new Date(l.endDate).getTime()-Date.now())/1000));t=Math.floor(s/86400)+"d "+Math.floor(s%86400/3600)+"h "+Math.floor(s%3600/60)+"m";}return "• **"+title+"** — "+String(l.status||"unknown")+(l.isFrozen?" · frozen":"")+" · "+t+" · ID: `"+(l._id||l.id)+"`";}
-async function accessToken(id){if(!getLinkedAccount(id))throw new Error("Link your Chaster account first with /link-chaster.");const t=await getTokensForDiscordUser(id);if(!t?.access_token)throw new Error("Chaster session expired. Run /link-chaster again.");return t.access_token;}
+async function accessToken(id){if(!getLinkedAccount(id))throw new Error("Link your Chaster account using the Link Chaster button in the dashboard.");const t=await getTokensForDiscordUser(id);if(!t?.access_token)throw new Error("Chaster session expired. Run /link-chaster again.");return t.access_token;}
 async function requireConfiguredRole(i,kind){if(!i.guildId)return false;const settings=getRoleSettings().find(x=>x.guild_id===i.guildId);const roleId=kind==="wearer"?settings?.wearer_role_id:settings?.keyholder_role_id;if(!roleId){await i.reply({ephemeral:true,content:"This server has not configured the "+kind+" role yet. An admin must run /configure-roles first."});return false;}const member=i.member?.roles?.cache?i.member:await i.guild.members.fetch(i.user.id);if(!member.roles.cache.has(roleId)){await i.reply({ephemeral:true,content:"This command is available to members with the configured **"+(kind==="wearer"?"Wearer":"Keyholder")+"** role. Your role is updated automatically from Chaster; try /sync-roles if it is missing."});return false;}return true;}
 async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const member=await guild.members.fetch(user.id);
@@ -95,7 +95,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const linkHealth=getChasterLinkHealth(user.id);
   const settings=getGuildRoleSettings(guild.id);
   const roleLabel=(roleId)=>{if(!roleId)return "Not configured";const role=guild.roles.cache.get(roleId);return role?role.name+" ("+(member.roles.cache.has(roleId)?"assigned":"not assigned")+")":"Configured role missing";};
-  let personalLocks=[],keyholderLocks=[],lockLoadError=!linked?"Link your Chaster account to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account with /link-chaster to load live locks.":null;
+  let personalLocks=[],keyholderLocks=[],lockLoadError=!linked?"Link your Chaster account using the button below to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account using the button below to load live locks.":null;
   if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account")){
     try{
       const token=await accessToken(user.id);
@@ -118,7 +118,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   }
   const invites=data.invites.slice(0,5).map(inv=>inv.invitee_id===user.id?"Incoming invitation from <@"+inv.inviter_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>":"Invitation sent to <@"+inv.invitee_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>");
   const title="**ChasterBot dashboard · "+guild.name+"**";
-  const account="**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy"):"Not linked · use /link-chaster");
+  const account="**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy") :"Not linked · use Link Chaster below");
   const roles="**Your server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id)+"\n\nUse /sync-roles to refresh your Chaster-derived roles.";
   const activity=getMemberSessionActivity(guild.id,user.id,8);
   const eventLabel=(event,actor,other)=>({invited:"<@"+actor+"> invited <@"+other+">",accepted:"<@"+actor+"> accepted <@"+other+">’s invitation",declined:"<@"+actor+"> declined <@"+other+">’s invitation",cancelled:"<@"+actor+"> cancelled an invitation to <@"+other+">",created:"Private session created for <@"+actor+"> and <@"+other+">",closed:"<@"+actor+"> closed the private session with <@"+other+">"}[event]||"Session activity");
@@ -147,6 +147,15 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
   const refresh=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashboard:refresh:"+tab+":"+userId).setLabel("Refresh").setStyle(ButtonStyle.Success));
   rows.push(refresh);
+  if(tab==="account"){
+    const linked=Boolean(getLinkedAccount(userId));
+    const actions=[];
+    if(linked)actions.push(new ButtonBuilder().setCustomId("dashaccount:status:"+userId).setLabel("Connection status").setStyle(ButtonStyle.Secondary));
+    actions.push(new ButtonBuilder().setCustomId("dashaccount:link:"+userId).setLabel(linked?"Reconnect Chaster":"Link Chaster").setStyle(ButtonStyle.Success));
+    if(linked)actions.push(new ButtonBuilder().setCustomId("dashaccount:unlink:"+userId).setLabel("Unlink account").setStyle(ButtonStyle.Danger));
+    actions.push(new ButtonBuilder().setCustomId("dashaccount:sync:"+userId).setLabel("Sync roles").setStyle(ButtonStyle.Primary));
+    rows.push(new ActionRowBuilder().addComponents(...actions));
+  }
   if(tab==="sessions"){
     const data=getMemberSessionDashboard(guild.id,userId);
     const actions=[new ButtonBuilder().setCustomId("dashsessioninvite:"+userId).setLabel("Invite member").setStyle(ButtonStyle.Success)];
@@ -338,6 +347,45 @@ async function sendDashboardSessionInvite(i,rawMemberId){
   return 'Invitation sent by DM to '+other.user.username+'. It expires in 10 minutes.';
 }
 export async function handleButton(i){
+if(i.customId.startsWith('dashaccount:')){
+  const [,action,userId]=i.customId.split(':');
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:'This dashboard belongs to another member.'});return true;}
+  if(!i.guild){await i.reply({ephemeral:true,content:'Open the dashboard from a server.'});return true;}
+  if(action==='link'){
+    await i.reply({ephemeral:true,content:'Authorize Chaster using this private link (expires in 10 minutes):\\n'+createAuthorizationUrl(i.user.id)});
+    return true;
+  }
+  if(action==='status'){
+    const linked=Boolean(getLinkedAccount(i.user.id));
+    const health=getChasterLinkHealth(i.user.id);
+    const message=!linked?'No Chaster account is linked. Use Link Chaster in the Account tab.':health?.status==='needs_reauth'?'Your Chaster connection needs attention. Reconnect using Link Chaster. Your existing bot data is unchanged.':'Your Chaster account is linked and has no recorded authorization errors.';
+    await i.reply({ephemeral:true,content:message});
+    return true;
+  }
+  if(action==='sync'){
+    await i.deferReply({ephemeral:true});
+    try{const result=await syncUserRoles(i.client,i.user.id);await i.editReply(result.message+'\\n\\nReturn to the Account tab and press Refresh to update the dashboard.');}
+    catch(error){await i.editReply(error.message||'Role synchronization failed.');}
+    return true;
+  }
+  if(action==='unlink'){
+    const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('dashaccount:unlink-confirm:'+userId).setLabel('Confirm unlink').setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId('dashaccount:unlink-cancel:'+userId).setLabel('Keep account linked').setStyle(ButtonStyle.Secondary));
+    await i.reply({ephemeral:true,content:'Unlinking deletes your saved Chaster connection and local lock snapshots. This does not cancel or change any Chaster locks. Continue?',components:[row]});
+    return true;
+  }
+  if(action==='unlink-cancel'){await i.update({content:'Your Chaster account remains linked.',components:[]});return true;}
+  if(action==='unlink-confirm'){
+    if(!getLinkedAccount(i.user.id)){await i.update({content:'No linked Chaster account was found.',components:[]});return true;}
+    deleteLinkedAccount(i.user.id);
+    const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+    const content=await buildMemberDashboard(i.guild,i.user,admin,'account');
+    await i.update({content,components:buildDashboardComponents(i.guild,i.user.id,admin,'account')});
+    return true;
+  }
+  await i.reply({ephemeral:true,content:'Unknown account action.'});
+  return true;
+}
+
 if(i.customId.startsWith('dashsessioninvite:')){
   const userId=i.customId.split(':')[1];
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:'This dashboard belongs to another member.'});return true;}
