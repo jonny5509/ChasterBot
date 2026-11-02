@@ -1,5 +1,5 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType} from "discord.js";
-import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getNotificationRetentionDays,setNotificationRetentionDays} from "./db.js";
+import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
@@ -64,6 +64,7 @@ new SlashCommandBuilder().setName("notification-queue-status").setDescription("V
 new SlashCommandBuilder().setName("notification-health").setDescription("Check notification channel access and delivery queue health.").setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 new SlashCommandBuilder().setName("notification-failures").setDescription("Review recent failed notification deliveries.").setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 new SlashCommandBuilder().setName("notification-history").setDescription("Review recent notification delivery outcomes.").setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+new SlashCommandBuilder().setName("notification-report").setDescription("View notification delivery success rates and volume.").addIntegerOption(o=>o.setName("period").setDescription("Reporting window").setRequired(false).addChoices({name:"7 days",value:7},{name:"30 days",value:30},{name:"90 days",value:90})).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 new SlashCommandBuilder().setName("notification-retention").setDescription("Set how long notification delivery history is kept.").addIntegerOption(o=>o.setName("days").setDescription("Retention period").setRequired(true).addChoices({name:"7 days",value:7},{name:"30 days",value:30},{name:"90 days",value:90})).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 new SlashCommandBuilder().setName("notification-retry").setDescription("Retry a failed notification by queue ID.").addIntegerOption(o=>o.setName("id").setDescription("ID shown by /notification-failures").setRequired(true).setMinValue(1)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 new SlashCommandBuilder().setName("notify-channel").setDescription("Set the server notification channel.").addChannelOption(o=>o.setName("channel").setDescription("Text channel").setRequired(true)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
@@ -212,6 +213,13 @@ if(n==="notification-retention"){
 const days=i.options.getInteger("days",true);
 setNotificationRetentionDays(i.guildId,days,i.user.id);
 return i.reply({ephemeral:true,content:"Notification delivery history will be retained for "+days+" days. Sent and failed channel records older than this period are removed during queue cleanup. Pending notifications are not deleted."});
+}
+if(n==="notification-report"){
+const days=i.options.getInteger("period")??7;
+const r=getDiscordNotificationDeliveryReport(i.guildId,days);
+const rate=r.successRate===null?"Not available (no completed deliveries)":r.successRate+"%";
+const avg=r.completed?r.averageAttempts.toFixed(2):"—";
+return i.reply({ephemeral:true,content:"**Notification delivery report · last "+days+" days**\\nSuccess rate: **"+rate+"**\\nSent: "+r.sent+" · Failed: "+r.failed+" · Pending: "+r.pending+"\\nAverage attempts per completed delivery: "+avg+"\\nSuccess rate counts sent vs. failed deliveries; pending items are excluded. No message contents or destination IDs are shown."});
 }
 if(n==="notification-history"){
 
