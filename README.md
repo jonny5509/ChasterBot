@@ -15,7 +15,7 @@ Independent Discord companion for Chaster using the official Public API.
 - Notification read and read-all actions
 - Read-only lock detail, lock seal, keyholder notes, application settings, permission catalogue, user overviews/statistics, achievements, badge counts, lock history and keyholder applications
 - Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
-- Opt-in lock-change notifications via five-minute polling
+- Opt-in lock-change notifications via five-minute polling, persisted in a SQLite delivery queue with restart recovery, duplicate suppression, and bounded retries
 - Profiles, points, leaderboards, community challenges and admin approval
 - Configurable text-only reward and optional consequence ideas
 - Dice game and optional AI-compatible keyholder persona
@@ -81,7 +81,7 @@ Official documentation:
 - The bot never asks for Chaster passwords; users link through OAuth.
 - AI cannot call lock APIs. Time changes require a linked keyholder, a matching lock in Chaster's keyholder-lock search, and a separate explicit confirmation.
 - Time changes are limited to 24 hours per command. Chaster remains authoritative and may reject a request.
-- Notifications are opt-in and polled every five minutes; they are not instantaneous webhooks.
+- Lock-change notifications are opt-in and polled every five minutes; they are not instantaneous webhooks. Detected changes and Chaster reauthorization alerts enter a persistent SQLite queue before delivery. The worker resumes pending messages after restarts, suppresses duplicate event enqueues, retries transient Discord failures with capped backoff, and marks permanent failures (such as blocked DMs or missing channels) for operator review.
 - Reward/consequence items are suggestions only; keep them consensual, optional, non-physical and non-financial.
 - AI is optional; without provider settings, the bot uses a scripted fallback.
 - Chaster's API is beta. Test with a Chaster test lock and confirm current endpoint schemas before production.
