@@ -96,7 +96,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const settings=getGuildRoleSettings(guild.id);
   const roleLabel=(roleId)=>{if(!roleId)return "Not configured";const role=guild.roles.cache.get(roleId);return role?role.name+" ("+(member.roles.cache.has(roleId)?"assigned":"not assigned")+")":"Configured role missing";};
   let personalLocks=[],keyholderLocks=[],lockLoadError=!linked?"Link your Chaster account using the button below to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account using the button below to load live locks.":null;
-  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account"||tab==="keyholder")){
+  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account"||tab==="keyholder"||tab==="calendar"||tab==="notifications")){
     try{
       const token=await accessToken(user.id);
       const [personalRaw,keyholderRaw]=await Promise.all([getMyLocks(token),getKeyholderLocks(token)]);
@@ -110,6 +110,14 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const lockSection=(heading,locks)=>heading+"\n"+(locks.length?locks.slice(0,3).map(lockLine).join("\n"):"No active locks returned.");
   const liveLocks=lockLoadError?"**Live lock data**\n"+lockLoadError:
     "**Live Chaster locks**\n"+lockSection("**Wearer locks**",personalLocks)+"\n\n"+lockSection("**Keyholder locks**",keyholderLocks);
+  let calendarEvents=[],notificationCounts=null,extraLoadError=null;
+  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="calendar"||tab==="notifications")){
+    try{
+      const token=await accessToken(user.id);
+      if(tab==="calendar"){const raw=await getCalendarEvents(token);calendarEvents=Array.isArray(raw)?raw:(raw?.items||raw?.events||raw?.data||[]);}
+      else notificationCounts=await getNotificationCounts(token);
+    }catch(error){extraLoadError=error.message||"Chaster data is temporarily unavailable.";}
+  }
   const data=getMemberSessionDashboard(guild.id,user.id);
   const sessions=[];
   for(const session of data.sessions){
@@ -136,13 +144,21 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
   else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
   else if(tab==="keyholder")body=lockLoadError?"**Keyholder tools**\n"+lockLoadError:keyholderLocks.length?"**Keyholder tools**\n"+lockSection("**Locks you keyhold**",keyholderLocks)+"\n\nUse the buttons below to view or delete private notes, or propose a time change. Every operation rechecks your configured Keyholder role and Chaster lock ownership.":"**Keyholder tools**\nNo keyheld locks were found, or your Chaster account is not connected. You need the configured Keyholder role and a trusted Chaster keyholder lock to use these actions.";
+  else if(tab==="notifications"){
+    const enabled=getNotificationPreference(guild.id,user.id);
+    const channelId=getNotificationChannel(guild.id);
+    body="**Notification controls**\nServer lock updates: **"+(enabled?"On":"Paused")+"**\nDelivery channel: "+(channelId?"<#"+channelId+">":"Not configured")+"\n\n**Chaster notifications**\n"+(extraLoadError?extraLoadError:notificationCounts?JSON.stringify(notificationCounts).slice(0,850):"Link Chaster to view notification counts.")+"\n\nUse the buttons below to pause/resume server updates or mark Chaster notifications as read.";
+  }
+  else if(tab==="calendar"){
+    body="**Your Chaster calendar**\n"+(extraLoadError?extraLoadError:calendarEvents.length?calendarEvents.slice(0,12).map(event=>"• **"+String(event.title||event.name||event.type||"Event").slice(0,55)+"** · "+String(event.startDate||event.start||event.date||"date unavailable")+" · ID: "+String(event._id||event.id||event.eventId||"unknown")).join("\n"):"No calendar events returned.")+"\n\nCreate a lock-period event or request deletion of an event below. Deletion is revalidated against your own Chaster calendar and requires confirmation.";
+  }
   else if(tab==="commands")body="**Command directory**\nCommands are shown when your current server permissions and configured roles allow them.\n\n"+(commandDirectory||"No commands available for your current roles and permissions.");
   else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
   else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not assigned")+(settings.wearer_role_id?"":" · Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\nActive wearer locks: "+personalLocks.length+"\nActive keyholder locks: "+keyholderLocks.length+(lockLoadError?"\nLock data: unavailable":"")+"\n\nChoose a tab below to see details.";
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["commands","Commands"]];
+  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["commands","Commands"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const rows=[];
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
