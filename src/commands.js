@@ -99,12 +99,12 @@ if(n==="chaster-conversations"){const raw=await getConversations(token),a=list(r
 if(n==="chaster-calendar"){const raw=await getCalendarEvents(token),a=list(raw,"items","events","data");return i.editReply(a.length?"**Your Chaster calendar**\n"+a.slice(0,15).map(x=>"• **"+String(x.title||x.name||x.type||"Event").slice(0,65)+"** · "+String(x.startDate||x.start||x.date||"date unavailable")).join("\n"):"No calendar events returned.");}
 const raw=await getNotificationCounts(token);return i.editReply("**Chaster notification counts**\n"+JSON.stringify(raw).slice(0,1400));
 }
+if(n==="keyholder-notes-delete"){const lockId=i.options.getString("lock_id",true),id=randomUUID();pending.set(id,{user:i.user.id,lockId,created:Date.now(),kind:"keyholder-note-delete",guildId:i.guildId});const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("knd:"+id).setLabel("Confirm delete notes").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("knx:"+id).setLabel("Cancel").setStyle(ButtonStyle.Secondary));return i.reply({ephemeral:true,content:"Delete your private Chaster keyholder notes for lock "+lockId+"? This cannot be undone.",components:[row]});}
 if(n==="lock-details"||n==="lock-seal"||n==="keyholder-notes"||n==="chaster-settings"||n==="permission-catalog"){
 await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);let raw;
 if(n==="lock-details")raw=await getLockDetails(i.options.getString("lock_id",true),token);
 else if(n==="lock-seal")raw=await getLockSeal(i.options.getString("lock_id",true),token);
 else if(n==="keyholder-notes")raw=await getKeyholderNotes(i.options.getString("lock_id",true),token);
-else if(n==="keyholder-notes-delete"){const lockId=i.options.getString("lock_id",true),id=randomUUID();pending.set(id,{user:i.user.id,lockId,created:Date.now(),kind:"keyholder-note-delete",guildId:i.guildId});const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("knd:"+id).setLabel("Confirm delete notes").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("knx:"+id).setLabel("Cancel").setStyle(ButtonStyle.Secondary));return i.reply({ephemeral:true,content:"Delete your private Chaster keyholder notes for lock "+lockId+"? This cannot be undone.",components:[row]});}
 else if(n==="chaster-settings")raw=await getChasterSettings(token);
 else raw=await getPermissionDefinitions(token);
 const out=JSON.stringify(raw,null,2)||"No data returned.";return i.editReply("**"+n+"**\n```json\n"+out.replace(/@/g,"＠").slice(0,1750)+"\n```");
