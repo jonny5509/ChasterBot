@@ -46,3 +46,5 @@ export function updateCalendarEvent(eventId,data,token){return chasterRequest("/
 export function deleteCalendarEvent(eventId,token){return chasterRequest("/calendar/events/"+encodeURIComponent(eventId),{token,method:"DELETE"});}
 
 export function archiveSharedLock(sharedLockId,token){return chasterRequest("/shared-locks/"+encodeURIComponent(sharedLockId)+"/archive",{token,method:"POST"});}
+
+export function deleteKeyholderNotes(lockId,token){return chasterRequest("/keyholder/notes/lock/"+encodeURIComponent(lockId),{token,method:"DELETE"});}
