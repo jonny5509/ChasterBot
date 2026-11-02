@@ -6,6 +6,7 @@ import {keyholderReply} from "./persona.js";
 import {randomUUID} from "node:crypto";
 import {syncUserRoles} from "./role-sync.js";
 import {consumeConfirmation} from "./confirmations.js";
+import {isOwnedResourceListed} from "./owned-resources.js";
 const pending=new Map();
 export const commands=[
 new SlashCommandBuilder().setName("help").setDescription("Show bot commands."),
@@ -177,14 +178,20 @@ if(allDay!==null)data.isAllDay=allDay;if(description!==null)data.description=des
 await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=await updateCalendarEvent(eventId,data,token);return i.editReply("Chaster calendar event updated.\n"+JSON.stringify(raw).slice(0,1200));
 }
 if(n==="shared-lock-archive"){
-const sharedLockId=i.options.getString("shared_lock_id",true),id=randomUUID();pending.set(id,{user:i.user.id,sharedLockId,created:Date.now(),kind:"shared-lock-archive"});
+const sharedLockId=i.options.getString("shared_lock_id",true);await i.deferReply({ephemeral:true});
+const token=await accessToken(i.user.id),owned=await getSharedLocks(token);
+if(!isOwnedResourceListed(owned,sharedLockId,["items","locks","sharedLocks","data"],"_id","id"))return i.editReply("That shared lock was not found in your own Chaster shared-lock list. No archive request was made.");
+const id=randomUUID();pending.set(id,{user:i.user.id,sharedLockId,created:Date.now(),kind:"shared-lock-archive"});
 const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("sa:"+id).setLabel("Confirm archive").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("sx:"+id).setLabel("Cancel").setStyle(ButtonStyle.Secondary));
-return i.reply({ephemeral:true,content:"Archive Chaster shared lock "+sharedLockId+"? This may hide it from active shared-lock listings.",components:[row]});
+return i.editReply({content:"Archive your Chaster shared lock "+sharedLockId+"? This may hide it from active shared-lock listings.",components:[row]});
 }
 if(n==="calendar-event-delete"){
-const eventId=i.options.getString("event_id",true),id=randomUUID();pending.set(id,{user:i.user.id,eventId,created:Date.now(),kind:"calendar-delete"});
+const eventId=i.options.getString("event_id",true);await i.deferReply({ephemeral:true});
+const token=await accessToken(i.user.id),owned=await getCalendarEvents(token);
+if(!isOwnedResourceListed(owned,eventId,["items","events","data"],"_id","id","eventId","event_id"))return i.editReply("That event was not found in your own Chaster calendar. No deletion request was made.");
+const id=randomUUID();pending.set(id,{user:i.user.id,eventId,created:Date.now(),kind:"calendar-delete"});
 const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("cd:"+id).setLabel("Confirm delete").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("cx:"+id).setLabel("Cancel").setStyle(ButtonStyle.Secondary));
-return i.reply({ephemeral:true,content:"Delete Chaster calendar event "+eventId+"? This cannot be undone.",components:[row]});
+return i.editReply({content:"Delete your Chaster calendar event "+eventId+"? This cannot be undone.",components:[row]});
 }
 if(n==="lock-status"||n==="keyholder-locks"){await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=n==="lock-status"?await getMyLocks(token):await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);return i.editReply(a.length?(n==="lock-status"?"**Your Chaster locks**\n":"**Locks you keyhold**\n")+a.slice(0,15).map(lockLine).join("\n"):"No locks returned for this account.");}
 if(n==="time-change"){const lockId=i.options.getString("lock_id",true),seconds=i.options.getInteger("seconds",true),reason=i.options.getString("reason",true);if(!seconds)return i.reply({ephemeral:true,content:"Seconds must be non-zero."});await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===lockId);if(!lock)return i.editReply("That lock is not in your Chaster keyholder lock list. No change made.");if(lock.trusted!==true||lock.role!=="keyholder")return i.editReply("Chaster did not confirm a trusted keyholder role for this lock. No change made.");const nonce=randomUUID();pending.set(nonce,{user:i.user.id,lockId,seconds,reason,guildId:i.guildId,kind:"time-change",created:Date.now()});const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("tc:"+nonce).setLabel("Confirm time change").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("tx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));return i.editReply({content:"**Confirm Chaster time change**\n"+String(lock.title||lockId)+"\n"+(seconds>0?"Add ":"Remove ")+Math.abs(seconds)+" seconds\nReason: "+reason+"\nNo change occurs unless you press Confirm.",components:[row]});}
@@ -220,7 +227,7 @@ if(result.status==="invalid"){await i.reply({ephemeral:true,content:"This confir
 if(result.status==="expired"){await i.update({content:"Confirmation expired. The shared lock was not archived.",components:[]});return true;}
 if(result.status==="cancelled"){await i.update({content:"Cancelled. The shared lock was not archived.",components:[]});return true;}
 await i.update({content:"Archiving the Chaster shared lock…",components:[]});
-try{const token=await accessToken(i.user.id);await archiveSharedLock(p.sharedLockId,token);await i.followUp({ephemeral:true,content:"Chaster accepted the shared-lock archive request."});}
+try{const token=await accessToken(i.user.id),owned=await getSharedLocks(token);if(!isOwnedResourceListed(owned,p.sharedLockId,["items","locks","sharedLocks","data"],"_id","id"))throw new Error("This shared lock is no longer present in your own Chaster shared-lock list. No archive request was made.");await archiveSharedLock(p.sharedLockId,token);await i.followUp({ephemeral:true,content:"Chaster accepted the shared-lock archive request."});}
 catch(e){await i.followUp({ephemeral:true,content:"Chaster did not confirm archiving: "+e.message});}
 return true;
 }
@@ -230,7 +237,7 @@ if(result.status==="invalid"){await i.reply({ephemeral:true,content:"This confir
 if(result.status==="expired"){await i.update({content:"Confirmation expired. No event was deleted.",components:[]});return true;}
 if(result.status==="cancelled"){await i.update({content:"Cancelled. No calendar event was deleted.",components:[]});return true;}
 await i.update({content:"Deleting the Chaster calendar event…",components:[]});
-try{const token=await accessToken(i.user.id);await deleteCalendarEvent(p.eventId,token);await i.followUp({ephemeral:true,content:"Chaster accepted the calendar event deletion."});}
+try{const token=await accessToken(i.user.id),owned=await getCalendarEvents(token);if(!isOwnedResourceListed(owned,p.eventId,["items","events","data"],"_id","id","eventId","event_id"))throw new Error("This event is no longer present in your own Chaster calendar. No deletion request was made.");await deleteCalendarEvent(p.eventId,token);await i.followUp({ephemeral:true,content:"Chaster accepted the calendar event deletion."});}
 catch(e){await i.followUp({ephemeral:true,content:"Chaster did not confirm deletion: "+e.message});}
 return true;
 }
