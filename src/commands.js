@@ -1,49 +1,52 @@
-import { SlashCommandBuilder, PermissionFlagsBits } from "discord.js";
-import { ensureProfile, leaderboard, createChallenge, setNotificationChannel, recentAudit } from "./db.js";
-
-export const commands = [
-  new SlashCommandBuilder().setName("help").setDescription("Show bot commands."),
-  new SlashCommandBuilder().setName("profile").setDescription("Show your profile and points."),
-  new SlashCommandBuilder().setName("leaderboard").setDescription("Show the community leaderboard."),
-  new SlashCommandBuilder().setName("challenge").setDescription("Create a community challenge.")
-    .addStringOption(o => o.setName("title").setDescription("Challenge title").setRequired(true).setMaxLength(100))
-    .addIntegerOption(o => o.setName("points").setDescription("Points from 1 to 100").setMinValue(1).setMaxValue(100)),
-  new SlashCommandBuilder().setName("notify-channel").setDescription("Set the notification channel.")
-    .addChannelOption(o => o.setName("channel").setDescription("Text channel").setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-  new SlashCommandBuilder().setName("audit").setDescription("Show recent admin actions.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
-  new SlashCommandBuilder().setName("lock-status").setDescription("Show your linked Chaster lock status.")
+import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle} from "discord.js";
+import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount} from "./db.js";
+import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
+import {getMyLocks,getKeyholderLocks,updateLockTime} from "./chaster.js";
+import {keyholderReply} from "./persona.js";
+const pending=new Map();
+export const commands=[
+new SlashCommandBuilder().setName("help").setDescription("Show bot commands."),
+new SlashCommandBuilder().setName("link-chaster").setDescription("Securely link your Chaster account."),
+new SlashCommandBuilder().setName("unlink-chaster").setDescription("Remove your saved Chaster connection."),
+new SlashCommandBuilder().setName("profile").setDescription("Show your profile and points."),
+new SlashCommandBuilder().setName("leaderboard").setDescription("Show the community leaderboard."),
+new SlashCommandBuilder().setName("lock-status").setDescription("Show your Chaster locks and timers."),
+new SlashCommandBuilder().setName("keyholder-locks").setDescription("List locks you keyhold."),
+new SlashCommandBuilder().setName("time-change").setDescription("Propose a verified keyholder time change.").addStringOption(o=>o.setName("lock_id").setDescription("Chaster lock ID").setRequired(true)).addIntegerOption(o=>o.setName("seconds").setDescription("Positive adds; negative removes (max 24h)").setRequired(true).setMinValue(-86400).setMaxValue(86400)).addStringOption(o=>o.setName("reason").setDescription("Audit reason").setRequired(true).setMaxLength(160)),
+new SlashCommandBuilder().setName("notifications").setDescription("Opt in or out of lock updates.").addBooleanOption(o=>o.setName("enabled").setDescription("Receive updates in this server").setRequired(true)),
+new SlashCommandBuilder().setName("notify-channel").setDescription("Set the server notification channel.").addChannelOption(o=>o.setName("channel").setDescription("Text channel").setRequired(true)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+new SlashCommandBuilder().setName("challenge").setDescription("Create a community challenge.").addStringOption(o=>o.setName("title").setDescription("Challenge title").setRequired(true).setMaxLength(100)).addIntegerOption(o=>o.setName("points").setDescription("Points (1–100)").setMinValue(1).setMaxValue(100)),
+new SlashCommandBuilder().setName("challenge-join").setDescription("Join a challenge.").addIntegerOption(o=>o.setName("id").setDescription("Challenge ID").setRequired(true).setMinValue(1)),
+new SlashCommandBuilder().setName("challenge-approve").setDescription("Approve a completed challenge entry.").addIntegerOption(o=>o.setName("id").setDescription("Challenge ID").setRequired(true).setMinValue(1)).addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+new SlashCommandBuilder().setName("award-points").setDescription("Award community points.").addUserOption(o=>o.setName("user").setDescription("Member").setRequired(true)).addIntegerOption(o=>o.setName("points").setDescription("Points (-100 to 100)").setRequired(true).setMinValue(-100).setMaxValue(100)).addStringOption(o=>o.setName("reason").setDescription("Reason").setRequired(true).setMaxLength(160)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+new SlashCommandBuilder().setName("reward-add").setDescription("Add a consensual text-only reward idea.").addStringOption(o=>o.setName("title").setDescription("Title").setRequired(true).setMaxLength(60)).addStringOption(o=>o.setName("description").setDescription("Description").setRequired(true).setMaxLength(250)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+new SlashCommandBuilder().setName("punishment-add").setDescription("Add a safe optional challenge consequence.").addStringOption(o=>o.setName("title").setDescription("Title").setRequired(true).setMaxLength(60)).addStringOption(o=>o.setName("description").setDescription("Non-physical, non-financial description").setRequired(true).setMaxLength(250)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+new SlashCommandBuilder().setName("reward-list").setDescription("List reward ideas."),
+new SlashCommandBuilder().setName("punishment-list").setDescription("List optional challenge consequences."),
+new SlashCommandBuilder().setName("dice").setDescription("Roll a dice.").addIntegerOption(o=>o.setName("sides").setDescription("Sides (2–100)").setMinValue(2).setMaxValue(100)),
+new SlashCommandBuilder().setName("keyholder-chat").setDescription("Chat with the optional AI keyholder persona.").addStringOption(o=>o.setName("message").setDescription("Your message").setRequired(true).setMaxLength(700)),
+new SlashCommandBuilder().setName("audit").setDescription("Show recent admin and lock actions.").setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 ];
-
-export async function handleCommand(i) {
-  const name = i.commandName;
-  if (name === "help") return i.reply({ ephemeral: true, content: "**ChasterBot Enhanced**\n/profile · /leaderboard · /challenge\n/notify-channel · /audit · /lock-status\n\nOAuth and lock-changing actions are staged for the next integration milestone." });
-  if (name === "profile") {
-    const p = ensureProfile(i.user);
-    return i.reply({ ephemeral: true, content: "**" + p.display_name + "**\nPoints: **" + p.points + "**" });
-  }
-  if (name === "leaderboard") {
-    const rows = leaderboard(10);
-    return i.reply(rows.length ? "**Community leaderboard**\n" + rows.map((r, n) => (n + 1) + ". **" + r.display_name + "** — " + r.points + " pts").join("\n") : "No profiles yet. Run /profile to join.");
-  }
-  if (name === "challenge") {
-    const title = i.options.getString("title", true);
-    const points = i.options.getInteger("points") ?? 10;
-    const id = createChallenge(i.guildId, title, points, i.user.id);
-    return i.reply("Challenge **#" + id + "** created: **" + title + "** (" + points + " points).");
-  }
-  if (name === "notify-channel") {
-    const channel = i.options.getChannel("channel", true);
-    if (!channel.isTextBased()) return i.reply({ ephemeral: true, content: "Choose a text channel." });
-    setNotificationChannel(i.guildId, channel.id, i.user.id);
-    return i.reply({ ephemeral: true, content: "Notification destination saved: " + channel.toString() });
-  }
-  if (name === "audit") {
-    const rows = recentAudit(i.guildId, 10);
-    return i.reply({ ephemeral: true, content: rows.length ? rows.map(r => "• <t:" + Math.floor(new Date(r.created_at + " UTC").getTime() / 1000) + ":R> <@" + r.actor_id + "> — " + r.action + ": " + r.details).join("\n") : "No audit entries yet." });
-  }
-  if (name === "lock-status") {
-    return i.reply({ ephemeral: true, content: "Chaster OAuth linking is not configured yet. No live lock data is available." });
-  }
+function lockLine(l){const title=String(l.title||"Untitled lock").slice(0,70);let t="time hidden/unavailable";if(l.isAllowedToViewTime!==false&&l.endDate){const s=Math.max(0,Math.floor((new Date(l.endDate).getTime()-Date.now())/1000));t=Math.floor(s/86400)+"d "+Math.floor(s%86400/3600)+"h "+Math.floor(s%3600/60)+"m";}return "• **"+title+"** — "+String(l.status||"unknown")+(l.isFrozen?" · frozen":"")+" · "+t+" · ID: `"+(l._id||l.id)+"`";}
+async function accessToken(id){if(!getLinkedAccount(id))throw new Error("Link your Chaster account first with /link-chaster.");const t=await getTokensForDiscordUser(id);if(!t?.access_token)throw new Error("Chaster session expired. Run /link-chaster again.");return t.access_token;}
+export async function handleCommand(i){const n=i.commandName;
+if(n==="help")return i.reply({ephemeral:true,content:"**ChasterBot Enhanced**\n/link-chaster · /unlink-chaster · /lock-status · /keyholder-locks · /time-change\n/notifications · /profile · /leaderboard · /award-points\n/challenge · /challenge-join · /challenge-approve\n/reward-add · /punishment-add · /reward-list · /punishment-list\n/dice · /keyholder-chat · /notify-channel · /audit\nLock changes always require a linked keyholder, a verified keyheld lock, a 24-hour per-command bound and explicit confirmation."});
+if(n==="link-chaster")return i.reply({ephemeral:true,content:"Authorize Chaster using this private link (expires in 10 minutes):\n"+createAuthorizationUrl(i.user.id)});
+if(n==="unlink-chaster"){deleteLinkedAccount(i.user.id);return i.reply({ephemeral:true,content:"Your saved Chaster connection and local lock snapshots have been deleted."});}
+if(n==="profile"){const p=ensureProfile(i.user);return i.reply({ephemeral:true,content:"**"+p.display_name+"**\nPoints: **"+p.points+"**\nChaster: "+(getLinkedAccount(i.user.id)?"linked":"not linked")});}
+if(n==="leaderboard"){const a=leaderboard(10);return i.reply(a.length?"**Community leaderboard**\n"+a.map((x,k)=>(k+1)+". **"+x.display_name+"** — "+x.points+" pts").join("\n"):"No profiles yet.");}
+if(n==="lock-status"||n==="keyholder-locks"){await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=n==="lock-status"?await getMyLocks(token):await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);return i.editReply(a.length?(n==="lock-status"?"**Your Chaster locks**\n":"**Locks you keyhold**\n")+a.slice(0,15).map(lockLine).join("\n"):"No locks returned for this account.");}
+if(n==="time-change"){const lockId=i.options.getString("lock_id",true),seconds=i.options.getInteger("seconds",true),reason=i.options.getString("reason",true);if(!seconds)return i.reply({ephemeral:true,content:"Seconds must be non-zero."});await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===lockId);if(!lock)return i.editReply("That lock is not in your Chaster keyholder lock list. No change made.");if(lock.trusted===false)return i.editReply("Chaster reports this lock is not trusted for keyholder controls. No change made.");const nonce=crypto.randomUUID();pending.set(nonce,{user:i.user.id,lockId,seconds,reason,guildId:i.guildId,created:Date.now()});const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("tc:"+nonce).setLabel("Confirm time change").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("tx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));return i.editReply({content:"**Confirm Chaster time change**\n"+String(lock.title||lockId)+"\n"+(seconds>0?"Add ":"Remove ")+Math.abs(seconds)+" seconds\nReason: "+reason+"\nNo change occurs unless you press Confirm.",components:[row]});}
+if(n==="notifications"){const on=i.options.getBoolean("enabled",true);setNotificationOptIn(i.guildId,i.user.id,on);return i.reply({ephemeral:true,content:on?"You opted in to lock updates in this server.":"You opted out of lock updates in this server."});}
+if(n==="notify-channel"){const c=i.options.getChannel("channel",true);if(!c.isTextBased())return i.reply({ephemeral:true,content:"Choose a text channel."});setNotificationChannel(i.guildId,c.id,i.user.id);return i.reply({ephemeral:true,content:"Notification channel saved. Members must opt in with /notifications."});}
+if(n==="challenge"){const id=createChallenge(i.guildId,i.options.getString("title",true),i.options.getInteger("points")??10,i.user.id);return i.reply("Challenge **#"+id+"** created. Members can join with /challenge-join.");}
+if(n==="challenge-join")return i.reply({ephemeral:true,content:joinChallenge(i.options.getInteger("id",true),i.user.id)?"You joined. Ask an admin to verify completion.":"Challenge not found or inactive."});
+if(n==="challenge-approve"){const u=i.options.getUser("user",true),p=approveChallenge(i.options.getInteger("id",true),u.id,i.user.id,i.guildId);return i.reply({ephemeral:true,content:p===null?"No pending entry found.":"Approved; awarded "+p+" points to "+u.username+"."});}
+if(n==="award-points"){const u=i.options.getUser("user",true),p=i.options.getInteger("points",true),r=i.options.getString("reason",true);addPoints(u.id,u.username,p);audit(i.guildId,i.user.id,"points_awarded",u.id+" "+p+" points: "+r);return i.reply({ephemeral:true,content:"Updated "+u.username+"'s score by "+p+" points."});}
+if(n==="reward-add"||n==="punishment-add"){const k=n==="reward-add"?"reward":"punishment";addRewardItem(i.guildId,k,i.options.getString("title",true),i.options.getString("description",true),i.user.id);return i.reply({ephemeral:true,content:"Saved "+k+". Items are suggestions only and require participant agreement."});}
+if(n==="reward-list"||n==="punishment-list"){const k=n==="reward-list"?"reward":"punishment",a=listRewardItems(i.guildId,k);return i.reply(a.length?"**"+k+" ideas**\n"+a.map(x=>"#"+x.id+" **"+x.title+"** — "+x.description).join("\n"):"No "+k+" ideas saved.");}
+if(n==="dice"){const sides=i.options.getInteger("sides")??6;return i.reply("🎲 "+i.user.username+" rolled **"+(Math.floor(Math.random()*sides)+1)+"** (d"+sides+").");}
+if(n==="keyholder-chat"){await i.deferReply();return i.editReply(await keyholderReply(i.options.getString("message",true),i.user.username));}
+if(n==="audit"){const a=recentAudit(i.guildId,10);return i.reply({ephemeral:true,content:a.length?a.map(x=>"• <t:"+Math.floor(new Date(x.created_at+" UTC").getTime()/1000)+":R> <@"+x.actor_id+"> — "+x.action+": "+x.details).join("\n"):"No audit entries yet."});}
 }
+export async function handleButton(i){if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const p=pending.get(id);if(!p||p.user!==i.user.id){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}pending.delete(id);if(Date.now()-p.created>120000){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(action==="tx"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted===false)throw new Error("Keyholder authorization or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
