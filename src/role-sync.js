@@ -1,19 +1,8 @@
 import {getRoleSettings,getAllLinkedAccounts,audit} from "./db.js";
 import {getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks} from "./chaster.js";
+import {shouldHaveWearerRole,shouldHaveKeyholderRole} from "./role-utils.js";
 
-function rows(value){
-  if(Array.isArray(value))return value;
-  if(Array.isArray(value?.locks))return value.locks;
-  if(Array.isArray(value?.items))return value.items;
-  if(Array.isArray(value?.data))return value.data;
-  if(Array.isArray(value?.results))return value.results;
-  return [];
-}
-function active(lock){
-  const status=String(lock?.status||"").toLowerCase();
-  return status==="locked"||status==="active";
-}
 async function applyRole(guild,member,roleId,shouldHave){
   if(!roleId)return "not-configured";
   const role=await guild.roles.fetch(roleId).catch(()=>null);
@@ -29,8 +18,8 @@ export async function syncUserRoles(client,discordId){
   if(!account)throw new Error("Link your Chaster account first with /link-chaster.");
   const tokens=await getTokensForDiscordUser(discordId);
   const [ownRaw,keyholderRaw]=await Promise.all([getMyLocks(tokens.access_token),getKeyholderLocks(tokens.access_token)]);
-  const wearer=rows(ownRaw).some(active);
-  const keyholder=rows(keyholderRaw).length>0;
+  const wearer=shouldHaveWearerRole(ownRaw);
+  const keyholder=shouldHaveKeyholderRole(keyholderRaw);
   const settings=getRoleSettings();
   let changed=0,servers=0;
   for(const s of settings){
