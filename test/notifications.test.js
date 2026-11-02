@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,createSessionInvite,recordPrivateSession,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -172,4 +172,26 @@ test("notification delivery report is time-windowed and scoped to its server",()
   assert.equal(other.completed,0);
   assert.equal(other.successRate,null);
   assert.throws(()=>getDiscordNotificationDeliveryReport(guild,14),/7, 30, or 90/);
+});
+
+
+test("member dashboard session data is scoped to the member and server",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="dashboard-guild-"+suffix;
+  const otherGuild=guild+"-other";
+  const member="dashboard-member-"+suffix;
+  const partner="dashboard-partner-"+suffix;
+  const outsider="dashboard-outsider-"+suffix;
+  const thread="dashboard-thread-"+suffix;
+  setGuildRoles(guild,"wearer-role-"+suffix,"keyholder-role-"+suffix,"admin");
+  assert.equal(getGuildRoleSettings(guild).wearer_role_id,"wearer-role-"+suffix);
+  createSessionInvite("dashboard-invite-"+suffix,guild,"parent-channel",partner,member,Date.now()+600000);
+  recordPrivateSession("dashboard-session-"+suffix,guild,thread,member,partner);
+  const data=getMemberSessionDashboard(guild,member);
+  assert.equal(data.sessions.length,1);
+  assert.equal(data.sessions[0].thread_id,thread);
+  assert.equal(data.invites.length,1);
+  assert.equal(data.invites[0].inviter_id,partner);
+  assert.equal(getMemberSessionDashboard(guild,outsider).sessions.length,0);
+  assert.equal(getMemberSessionDashboard(otherGuild,member).sessions.length,0);
 });
