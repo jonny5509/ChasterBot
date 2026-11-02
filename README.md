@@ -52,7 +52,7 @@ ChasterBot requests only the scopes used by its current features:
 - `notifications:read`, `notifications:write`: notification views and read actions
 - `calendar:read`, `calendar:write`: calendar event views and edits
 
-The bot does not request profile editing, user writing, messaging writing or post-management scopes. If you linked ChasterBot before this scope reduction, run `/link-chaster` again and approve the updated consent screen; existing access/refresh tokens do not automatically gain newly requested scopes. The bot also records Chaster 401 responses and revoked/invalid refresh grants as a connection-health issue, sends a private relink prompt with a 24-hour notification throttle, and clears the warning after successful reauthorization. Run `/chaster-link-status` to check your own connection. Unlinking clears the local health record.
+The bot does not request profile editing, user writing, messaging writing or post-management scopes. If you linked ChasterBot before this scope reduction, run `/link-chaster` again and approve the updated consent screen; existing access/refresh tokens do not automatically gain newly requested scopes. The bot also records Chaster 401 responses and revoked/invalid refresh grants as a connection-health issue, sends a private relink prompt with a 24-hour notification throttle, and clears the warning after successful reauthorization. Run `/chaster-link-status` to check your own connection. Unlinking clears the local health record. Chaster API requests also use bounded retry protection: only idempotent GET requests retry brief 429 responses (honoring `Retry-After`) and transient 502/503/504 or network failures. Write requests are never automatically replayed. Longer rate limits return a retry delay to the user rather than keeping the interaction waiting.
 
 Official documentation:
 - https://docs.chaster.app/api/basics/getting-started/
@@ -109,4 +109,4 @@ This bot intentionally exposes supported Public API operations as focused Discor
 
 ## Development
 
-Run `npm run check` for JavaScript syntax checks and `npm test` for the automated API, token-encryption, OAuth-state, role-classification, and destructive-action confirmation, and Chaster resource-ownership tests. GitHub Actions runs both on pushes and pull requests.
+Run `npm run check` for JavaScript syntax checks and `npm test` for the automated API and rate-limit retry, token-encryption, OAuth-state, role-classification, and destructive-action confirmation, and Chaster resource-ownership tests. GitHub Actions runs both on pushes and pull requests.
