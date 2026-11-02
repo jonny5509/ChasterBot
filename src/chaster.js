@@ -20,3 +20,10 @@ export function getUserAchievements(userId,token){return chasterRequest("/achiev
 export function getUserBadgeCount(token){return chasterRequest("/users/badge/count",{token});}
 export function getLockHistory(lockId,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/history",{token,method:"POST",body:{}});}
 export function getKeyholderApplications(lockId,token){return chasterRequest("/locks/"+encodeURIComponent(lockId)+"/keyholder-applications",{token});}
+
+export function getConversation(conversationId,token){return chasterRequest("/conversations/"+encodeURIComponent(conversationId),{token});}
+export function getConversationMessages(conversationId,token){return chasterRequest("/conversations/"+encodeURIComponent(conversationId)+"/messages",{token});}
+export function getSharedLockFavorite(sharedLockId,token){return chasterRequest("/shared-locks/"+encodeURIComponent(sharedLockId)+"/favorite",{token});}
+export function getNotificationChannelHealth(token){return chasterRequest("/notifications/channels/health",{token});}
+export function markNotificationRead(notificationId,token){return chasterRequest("/notifications/"+encodeURIComponent(notificationId)+"/read",{token,method:"POST"});}
+export function markAllNotificationsRead(token){return chasterRequest("/notifications/read-all",{token,method:"POST"});}
