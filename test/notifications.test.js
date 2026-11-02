@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getNotificationRetentionDays,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -118,4 +118,27 @@ test("notification history is scoped to the server and omits message and destina
   assert.equal(Object.hasOwn(row,"content"),false);
   assert.equal(Object.hasOwn(row,"target_id"),false);
   assert.equal(getDiscordNotificationHistory(otherGuild,10).some(x=>x.id===queued.id),false);
+});
+
+
+test("notification retention is configurable per server and cleanup preserves pending deliveries",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="notification-retention-guild-"+suffix;
+  const channel="notification-retention-channel-"+suffix;
+  setNotificationChannel(guild,channel,"test-admin");
+  assert.equal(getNotificationRetentionDays(guild),30);
+  assert.equal(setNotificationRetentionDays(guild,7,"test-admin"),7);
+  assert.equal(getNotificationRetentionDays(guild),7);
+  assert.throws(()=>setNotificationRetentionDays(guild,14,"test-admin"),/7, 30, or 90/);
+  const sentKey="notification-retention-sent:"+suffix;
+  const pendingKey="notification-retention-pending:"+suffix;
+  assert.equal(enqueueDiscordNotification({dedupeKey:sentKey,destinationType:"channel",targetId:channel,content:"old sent"}),true);
+  const sent=getDueDiscordNotifications(100).find(x=>x.dedupe_key===sentKey);
+  markDiscordNotificationSent(sent.id);
+  assert.equal(enqueueDiscordNotification({dedupeKey:pendingKey,destinationType:"channel",targetId:channel,content:"pending"}),true);
+  const future=Date.now()+8*86400000;
+  pruneDiscordNotificationQueue(future);
+  const history=getDiscordNotificationHistory(guild,20);
+  assert.equal(history.some(x=>x.id===sent.id),false);
+  assert.equal(history.some(x=>x.status==="pending"),true);
 });
