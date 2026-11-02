@@ -97,7 +97,7 @@ export function setNotificationRetentionDays(guildId,days,actorId){
 }
 export function pruneDiscordNotificationQueue(now=Date.now()){
   const defaultSentBefore=now-30*86400000,defaultFailedBefore=now-90*86400000;
-  const channelResult=db.prepare("DELETE FROM discord_notification_queue WHERE destination_type='channel' AND ((status='sent' AND sent_at<now-(COALESCE((SELECT notification_retention_days FROM guild_settings WHERE notification_channel_id=discord_notification_queue.target_id),30)*86400000)) OR (status='failed' AND created_at<now-(COALESCE((SELECT notification_retention_days FROM guild_settings WHERE notification_channel_id=discord_notification_queue.target_id),30)*86400000)))").run();
+  const channelResult=db.prepare("DELETE FROM discord_notification_queue WHERE destination_type='channel' AND ((status='sent' AND sent_at<(?-COALESCE((SELECT notification_retention_days FROM guild_settings WHERE notification_channel_id=discord_notification_queue.target_id),30)*86400000)) OR (status='failed' AND created_at<(?-COALESCE((SELECT notification_retention_days FROM guild_settings WHERE notification_channel_id=discord_notification_queue.target_id),30)*86400000)))").run(now,now);
   const userResult=db.prepare("DELETE FROM discord_notification_queue WHERE destination_type='user' AND ((status='sent' AND sent_at<?) OR (status='failed' AND created_at<?))").run(defaultSentBefore,defaultFailedBefore);
   return channelResult.changes+userResult.changes;
 }
