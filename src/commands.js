@@ -564,6 +564,35 @@ return true;
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
 
 export async function handleModal(i){
+  if(i.customId.startsWith("dashcalendar-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    const token=await accessToken(i.user.id);
+    if(action==="add"){
+      const start=new Date(i.fields.getTextInputValue("start").trim());
+      const endText=i.fields.getTextInputValue("end").trim();
+      const end=endText?new Date(endText):null;
+      const description=i.fields.getTextInputValue("description").trim();
+      if(!Number.isFinite(start.getTime())||(endText&&(!Number.isFinite(end.getTime())||end<=start))){await i.reply({ephemeral:true,content:"Use valid ISO 8601 dates; the optional end must be later than the start."});return true;}
+      await i.deferReply({ephemeral:true});
+      try{const data={type:"lock_period",startDate:start.toISOString(),...(end?{endDate:end.toISOString()}:{}),...(description?{description}:{})};const result=await createCalendarEvent(data,token);await i.editReply("Chaster accepted the calendar event creation request.\n"+JSON.stringify(result).slice(0,1000));}
+      catch(error){await i.editReply("Could not create the calendar event: "+error.message);}
+      return true;
+    }
+    if(action==="delete"){
+      const eventId=i.fields.getTextInputValue("event_id").trim();
+      if(!eventId||eventId.length>100){await i.reply({ephemeral:true,content:"Enter a valid calendar event ID."});return true;}
+      await i.deferReply({ephemeral:true});
+      try{
+        const owned=await getCalendarEvents(token);
+        if(!isOwnedResourceListed(owned,eventId,["items","events","data"],"_id","id","eventId","event_id")){await i.editReply("That event was not found in your own Chaster calendar. No deletion request was made.");return true;}
+        const id=randomUUID();pending.set(id,{user:i.user.id,eventId,created:Date.now(),kind:"calendar-delete"});
+        const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("cd:"+id).setLabel("Confirm delete").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("cx:"+id).setLabel("Cancel").setStyle(ButtonStyle.Secondary));
+        await i.editReply({content:"Delete your Chaster calendar event "+eventId+"? This cannot be undone. No deletion occurs unless you confirm.",components:[row]});
+      }catch(error){await i.editReply("Could not validate that calendar event: "+error.message);}
+      return true;
+    }
+  }
   if(i.customId.startsWith("dashkeyholder-submit:")){
     const [,action,userId]=i.customId.split(":");
     if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
