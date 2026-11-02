@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";\nimport {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel} from "../src/db.js";
+import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";\nimport {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -38,4 +38,30 @@ test("notification preferences can be paused and resumed per server",()=>{
   assert.equal(getNotificationPreference(guild,user),false);
   setNotificationChannel(guild,"notification-channel-"+Date.now(),"test-admin");
   assert.match(getNotificationChannel(guild),/^notification-channel-/);
+});
+
+
+test("failed channel notifications are visible and retryable only by their own server",()=>{
+  const guild="notification-retry-guild-"+Date.now()+"-"+Math.random();
+  const otherGuild=guild+"-other";
+  const channel="notification-retry-channel-"+Date.now()+"-"+Math.random();
+  setNotificationChannel(guild,channel,"test-admin");
+  const key="notification-retry:"+guild;
+  assert.equal(enqueueDiscordNotification({dedupeKey:key,destinationType:"channel",targetId:channel,content:"PRIVATE MESSAGE BODY"}),true);
+  const queued=getDueDiscordNotifications(100).find(x=>x.dedupe_key===key);
+  assert.ok(queued);
+  markDiscordNotificationFailed(queued.id,"Missing Permissions",{retryAt:null});
+  const failed=getFailedDiscordNotifications(guild,5);
+  const row=failed.find(x=>x.id===queued.id);
+  assert.ok(row);
+  assert.equal(row.attempts,1);
+  assert.equal(Object.hasOwn(row,"content"),false);
+  assert.equal(Object.hasOwn(row,"target_id"),false);
+  assert.equal(retryFailedDiscordNotification(queued.id,otherGuild),false);
+  assert.equal(retryFailedDiscordNotification(queued.id,guild),true);
+  assert.equal(retryFailedDiscordNotification(queued.id,guild),false);
+  assert.equal(getDiscordNotificationQueueStats(guild).pending,1);
+  const retried=getDueDiscordNotifications(100).find(x=>x.id===queued.id);
+  assert.equal(retried.attempts,0);
+  assert.equal(retried.last_error,"");
 });
