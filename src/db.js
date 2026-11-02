@@ -75,8 +75,9 @@ export function markDiscordNotificationFailed(id,error,{retryAt=null,maxAttempts
   const attempts=row.attempts+1,failed=retryAt===null||attempts>=maxAttempts;
   db.prepare("UPDATE discord_notification_queue SET attempts=?,status=?,next_attempt_at=?,last_error=? WHERE id=? AND status='pending'").run(attempts,failed?'failed':'pending',retryAt??0,String(error||"Delivery failed").slice(0,500),id);
 }
-export function getDiscordNotificationQueueStats(){
-  return db.prepare("SELECT status,COUNT(*) AS count FROM discord_notification_queue GROUP BY status").all().reduce((a,x)=>(a[x.status]=x.count,a),{pending:0,sent:0,failed:0});
+export function getDiscordNotificationQueueStats(guildId){
+  const rows=db.prepare("SELECT q.status,COUNT(*) AS count FROM discord_notification_queue q JOIN guild_settings g ON g.notification_channel_id=q.target_id WHERE q.destination_type='channel' AND g.guild_id=? GROUP BY q.status").all(String(guildId));
+  return rows.reduce((a,x)=>(a[x.status]=x.count,a),{pending:0,sent:0,failed:0});
 }
 
 export function pruneDiscordNotificationQueue(now=Date.now()){
