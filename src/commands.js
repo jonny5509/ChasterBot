@@ -1,7 +1,7 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType} from "discord.js";
 import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
-import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getApiHealth} from "./chaster.js";
+import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getApiHealth,getPublicLocks,getProfileCompleteness} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
 import {randomUUID} from "node:crypto";
 import {syncUserRoles} from "./role-sync.js";
@@ -47,6 +47,8 @@ new SlashCommandBuilder().setName("chaster-ignored-users").setDescription("List 
 new SlashCommandBuilder().setName("chaster-lock-stats-config").setDescription("View your Chaster lock-statistics reset configuration."),
 new SlashCommandBuilder().setName("chaster-community-categories").setDescription("List Chaster community-event categories."),
 new SlashCommandBuilder().setName("chaster-api-health").setDescription("Check Chaster Public API health.") ,
+new SlashCommandBuilder().setName("chaster-public-locks").setDescription("View public locks for a Chaster user ID.").addStringOption(o=>o.setName("user_id").setDescription("Chaster user ID").setRequired(true)),
+new SlashCommandBuilder().setName("chaster-profile-completeness").setDescription("View your Chaster profile completeness."),
 new SlashCommandBuilder().setName("time-change").setDescription("Propose a verified keyholder time change.").addStringOption(o=>o.setName("lock_id").setDescription("Chaster lock ID").setRequired(true)).addIntegerOption(o=>o.setName("seconds").setDescription("Positive adds; negative removes (max 24h)").setRequired(true).setMinValue(-86400).setMaxValue(86400)).addStringOption(o=>o.setName("reason").setDescription("Audit reason").setRequired(true).setMaxLength(160)),
 new SlashCommandBuilder().setName("notifications").setDescription("Opt in or out of lock updates.").addBooleanOption(o=>o.setName("enabled").setDescription("Receive updates in this server").setRequired(true)),
 new SlashCommandBuilder().setName("notify-channel").setDescription("Set the server notification channel.").addChannelOption(o=>o.setName("channel").setDescription("Text channel").setRequired(true)).setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
@@ -138,6 +140,11 @@ else if(n==="chaster-ignored-users")raw=await getIgnoredUsers(token);
 else if(n==="chaster-lock-stats-config")raw=await getLockStatsResetConfig(token);
 else if(n==="chaster-community-categories")raw=await getCommunityEventCategories(token);
 else raw=await getApiHealth(token);
+const out=JSON.stringify(raw,null,2)||"No data returned.";return i.editReply("**"+n+"**\\n```json\\n"+out.replace(/@/g,"＠").slice(0,1750)+"\\n```");
+}
+if(n==="chaster-public-locks"||n==="chaster-profile-completeness"){
+await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);
+const raw=n==="chaster-public-locks"?await getPublicLocks(i.options.getString("user_id",true),token):await getProfileCompleteness(token);
 const out=JSON.stringify(raw,null,2)||"No data returned.";return i.editReply("**"+n+"**\\n```json\\n"+out.replace(/@/g,"＠").slice(0,1750)+"\\n```");
 }
 if(n==="lock-status"||n==="keyholder-locks"){await i.deferReply({ephemeral:true});const token=await accessToken(i.user.id);const raw=n==="lock-status"?await getMyLocks(token):await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);return i.editReply(a.length?(n==="lock-status"?"**Your Chaster locks**\n":"**Locks you keyhold**\n")+a.slice(0,15).map(lockLine).join("\n"):"No locks returned for this account.");}
