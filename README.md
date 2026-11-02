@@ -97,4 +97,4 @@ This bot intentionally exposes supported Public API operations as focused Discor
 
 ## Development
 
-Run `npm run check` for JavaScript syntax checks and `npm test` for the automated API-request tests. GitHub Actions runs both on pushes and pull requests.
+Run `npm run check` for JavaScript syntax checks and `npm test` for the automated API, token-encryption, and OAuth-state tests. GitHub Actions runs both on pushes and pull requests.
