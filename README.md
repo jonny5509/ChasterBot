@@ -6,7 +6,7 @@ Independent Discord companion for Chaster using the official Public API.
 - Discord slash commands and private Chaster account linking
 - OAuth 2 authorization-code exchange and refresh-token flow
 - AES-256-GCM encrypted OAuth token storage in SQLite
-- Personal lock status, keyholder lock listing and Chaster profile\n- Read-only shared lock, private conversation, calendar and notification-count views
+- Personal lock status, keyholder lock listing and Chaster profile\n- Read-only shared lock, private conversation, calendar and notification-count views\n- Read-only lock detail, lock seal, keyholder notes, application settings and permission catalogue
 - Keyholder time changes with lock-list revalidation, explicit confirmation, a 24-hour command bound and audit record
 - Opt-in lock-change notifications via five-minute polling
 - Profiles, points, leaderboards, community challenges and admin approval
@@ -41,7 +41,7 @@ Official documentation:
 - https://api.chaster.app/api
 
 ## Commands
-/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change\n/chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications
+/link-chaster, /unlink-chaster, /lock-status, /keyholder-locks, /time-change\n/chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications\n/lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog
 /notifications, /notify-channel, /profile, /leaderboard, /award-points
 /challenge, /challenge-join, /challenge-approve
 /reward-add, /punishment-add, /reward-list, /punishment-list
@@ -72,3 +72,4 @@ Discord bots cannot join ordinary group DMs. Private threads are the supported b
 
 
 Discord does not support dynamically hiding individual slash commands based on a member’s custom server roles. These role-specific commands may still appear in the command picker, but ChasterBot enforces the role check when they are invoked and responds ephemerally if the member lacks the required role.
+\n\n## Chaster API coverage roadmap\nThis bot intentionally exposes supported Public API operations as focused Discord commands rather than a raw arbitrary-HTTP command. The current API integration includes read views for profile, personal/keyholder locks, shared locks, conversations, calendar, notification counts, lock details/seals, keyholder notes, app settings and permission definitions. Remaining endpoint families are being added in separate reviewed batches: lock/shared-lock writes, messaging actions, notifications, calendar writes, profile/user tools, keyholder applications, posts, and selected extension workflows. Sensitive operations such as emergency unlock, combination retrieval, reports, and account-security features are not exposed as unrestricted commands.\n
