@@ -1,5 +1,5 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,ModalBuilder,TextInputBuilder,TextInputStyle} from "discord.js";
-import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
+import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,listChallenges,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
@@ -144,6 +144,10 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
   else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
   else if(tab==="keyholder")body=lockLoadError?"**Keyholder tools**\n"+lockLoadError:keyholderLocks.length?"**Keyholder tools**\n"+lockSection("**Locks you keyhold**",keyholderLocks)+"\n\nUse the buttons below to view or delete private notes, or propose a time change. Every operation rechecks your configured Keyholder role and Chaster lock ownership.":"**Keyholder tools**\nNo keyheld locks were found, or your Chaster account is not connected. You need the configured Keyholder role and a trusted Chaster keyholder lock to use these actions.";
+  else if(tab==="community"){
+    const challenges=listChallenges(guild.id),rewards=listRewardItems(guild.id,"reward"),punishments=listRewardItems(guild.id,"punishment");
+    body="**Community challenges**\\n"+(challenges.length?challenges.map(c=>"• **#"+c.id+" "+String(c.title).slice(0,55)+"** · "+c.points+" pts · "+c.participants+" joined").join("\\n"):"No active challenges yet.")+"\\n\\n**Reward ideas**\\n"+(rewards.length?rewards.slice(0,5).map(x=>"• "+x.title+" — "+x.description).join("\\n"):"None saved.")+"\\n\\n**Optional consequences**\\n"+(punishments.length?punishments.slice(0,5).map(x=>"• "+x.title+" — "+x.description).join("\\n"):"None saved.")+"\\n\\nAll rewards and consequences are suggestions only: participation and agreement are voluntary.";
+  }
   else if(tab==="conversations"){
     body="**Your Chaster conversations**\\n"+(extraLoadError?extraLoadError:conversations.length?conversations.slice(0,12).map(c=>"• **"+String(c.title||c.name||c.user?.username||c.participant?.username||"Conversation").slice(0,55)+"** · ID: "+String(c._id||c.id||"unknown")).join("\\n"):"No conversations returned.")+"\\n\\nUse Open conversation and enter an ID above to read its messages. This dashboard is read-only; it cannot send messages.";
   }
@@ -161,7 +165,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["conversations","Messages"],["commands","Commands"]];
+  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["community","Community"],["conversations","Messages"],["commands","Commands"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const rows=[];
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
@@ -182,6 +186,10 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashkeyholder:delete-notes:"+userId).setLabel("Delete lock notes").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary)
     ];
+    rows.push(new ActionRowBuilder().addComponents(...actions));
+  }
+  if(tab==="community"){
+    const actions=[new ButtonBuilder().setCustomId("dashcommunity:create:"+userId).setLabel("Create challenge").setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId("dashcommunity:join:"+userId).setLabel("Join challenge").setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId("dashcommunity:approve:"+userId).setLabel("Approve entry").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:reward:"+userId).setLabel("Add reward idea").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:punishment:"+userId).setLabel("Add optional consequence").setStyle(ButtonStyle.Secondary)];
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
   if(tab==="conversations"){
@@ -469,6 +477,20 @@ const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
 return true;
 }
+if(i.customId.startsWith("dashcommunity:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+  const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+  if(["create","approve","reward","punishment"].includes(action)&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to perform this community action."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashcommunity-submit:"+action+":"+userId).setTitle(({create:"Create challenge",join:"Join challenge",approve:"Approve challenge entry",reward:"Add reward idea",punishment:"Add optional consequence"})[action]||"Community action");
+  const field=(id,label,style=TextInputStyle.Short,required=true,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(required).setMaxLength(max));
+  if(action==="create")modal.addComponents(field("title","Challenge title",TextInputStyle.Short,true,100),field("points","Points (1–100)",TextInputStyle.Short,true,3));
+  else if(action==="join")modal.addComponents(field("challenge_id","Challenge ID",TextInputStyle.Short,true,10));
+  else if(action==="approve")modal.addComponents(field("challenge_id","Challenge ID",TextInputStyle.Short,true,10),field("member_id","Member Discord ID",TextInputStyle.Short,true,25));
+  else modal.addComponents(field("title",action==="reward"?"Reward title":"Consequence title",TextInputStyle.Short,true,60),field("description","Description (voluntary, safe and non-financial)",TextInputStyle.Paragraph,true,250));
+  await i.showModal(modal);return true;
+}
 if(i.customId.startsWith("dashconversation:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -533,7 +555,7 @@ const action=parts[1],tab=action==="refresh"?parts[2]:action,userId=action==="re
 if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
 if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-const allowedTabs=["overview","roles","sessions","account","keyholder","notifications","calendar","commands","admin"];
+const allowedTabs=["overview","roles","sessions","account","keyholder","notifications","calendar","community","conversations","commands","admin"];
 const selected=allowedTabs.includes(tab)?tab:"overview";
 if(selected==="admin"&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to view this tab."});return true;}
 const content=await buildMemberDashboard(i.guild,i.user,admin,selected);
@@ -577,6 +599,40 @@ return true;
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
 
 export async function handleModal(i){
+  if(i.customId.startsWith("dashcommunity-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+    const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
+    if(["create","approve","reward","punishment"].includes(action)&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to perform this community action."});return true;}
+    try{
+      let message="";
+      if(action==="create"){
+        const title=i.fields.getTextInputValue("title").trim(),pointsText=i.fields.getTextInputValue("points").trim(),points=Number(pointsText);
+        if(!title||!/^\\d+$/.test(pointsText)||!Number.isInteger(points)||points<1||points>100)throw new Error("Enter a title and a whole-number point value from 1 to 100.");
+        const id=createChallenge(i.guildId,title,points,i.user.id);message="Created challenge #"+id+". Members can join from the Community tab.";
+      }else if(action==="join"){
+        const idText=i.fields.getTextInputValue("challenge_id").trim();
+        if(!/^\\d+$/.test(idText)||!joinChallenge(Number(idText),i.user.id,i.guildId))throw new Error("That active challenge was not found in this server, or you have already joined.");
+        message="You joined challenge #"+idText+". Ask a server admin to approve your completion.";
+      }else if(action==="approve"){
+        const idText=i.fields.getTextInputValue("challenge_id").trim(),memberId=i.fields.getTextInputValue("member_id").trim();
+        if(!/^\\d+$/.test(idText)||!/^\\d{17,20}$/.test(memberId))throw new Error("Enter a valid challenge ID and Discord member ID.");
+        const member=await i.guild.members.fetch(memberId).catch(()=>null);
+        if(!member)throw new Error("That member is not in this server.");
+        const points=approveChallenge(Number(idText),memberId,i.user.id,i.guildId);
+        if(points===null)throw new Error("No pending entry was found for that member and active challenge.");
+        message="Approved completion for "+member.user.username+"; awarded "+points+" points.";
+      }else if(action==="reward"||action==="punishment"){
+        const title=i.fields.getTextInputValue("title").trim(),description=i.fields.getTextInputValue("description").trim();
+        if(!title||!description)throw new Error("A title and description are required.");
+        addRewardItem(i.guildId,action==="reward"?"reward":"punishment",title,description,i.user.id);
+        message="Saved the "+(action==="reward"?"reward idea":"optional consequence")+". It remains voluntary and requires participant agreement.";
+      }else throw new Error("Unknown community action.");
+      await i.reply({ephemeral:true,content:message});
+    }catch(error){await i.reply({ephemeral:true,content:error.message||"The community action failed."});}
+    return true;
+  }
   if(i.customId.startsWith("dashconversation-submit:")){
     const [,userId]=i.customId.split(":");
     if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
