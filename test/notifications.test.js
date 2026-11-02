@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,createSessionInvite,consumeSessionInvite,deleteSessionInvite,deletePrivateSession,recordPrivateSession,setGuildRoles,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,createSessionInvite,consumeSessionInvite,deleteSessionInvite,deletePrivateSession,recordPrivateSession,recordSessionActivity,getMemberSessionActivity,setGuildRoles,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -241,4 +241,22 @@ test("only the intended invitee can consume a pending session invitation",()=>{
   const accepted=consumeSessionInvite(inviteId,invitee);
   assert.equal(accepted.invitee_id,invitee);
   assert.equal(consumeSessionInvite(inviteId,invitee),null);
+});
+
+
+test("session activity history is limited to participants and their server",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="session-activity-guild-"+suffix;
+  const otherGuild=guild+"-other";
+  const first="session-activity-first-"+suffix;
+  const second="session-activity-second-"+suffix;
+  const outsider="session-activity-outsider-"+suffix;
+  recordSessionActivity(guild,first,second,"invited",{inviteId:"activity-invite-"+suffix});
+  recordSessionActivity(guild,second,first,"accepted",{inviteId:"activity-invite-"+suffix,threadId:"activity-thread-"+suffix});
+  recordSessionActivity(guild,first,second,"created",{threadId:"activity-thread-"+suffix});
+  const history=getMemberSessionActivity(guild,first,2);
+  assert.equal(history.length,2);
+  assert.deepEqual(history.map(item=>item.event),["created","accepted"]);
+  assert.equal(getMemberSessionActivity(guild,outsider).length,0);
+  assert.equal(getMemberSessionActivity(otherGuild,first).length,0);
 });
