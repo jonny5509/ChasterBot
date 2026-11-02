@@ -119,7 +119,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const invites=data.invites.slice(0,5).map(inv=>inv.invitee_id===user.id?"Incoming invitation from <@"+inv.inviter_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>":"Invitation sent to <@"+inv.invitee_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>");
   const title="**ChasterBot dashboard · "+guild.name+"**";
   const account="**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy") :"Not linked · use Link Chaster below");
-  const roles="**Your server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id)+"\n\nUse /sync-roles to refresh your Chaster-derived roles.";
+  const roles="**Your server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id)+"\n\nUse Sync roles on the Account tab to refresh your Chaster-derived roles.";
   const activity=getMemberSessionActivity(guild.id,user.id,8);
   const eventLabel=(event,actor,other)=>({invited:"<@"+actor+"> invited <@"+other+">",accepted:"<@"+actor+"> accepted <@"+other+">’s invitation",declined:"<@"+actor+"> declined <@"+other+">’s invitation",cancelled:"<@"+actor+"> cancelled an invitation to <@"+other+">",created:"Private session created for <@"+actor+"> and <@"+other+">",closed:"<@"+actor+"> closed the private session with <@"+other+">"}[event]||"Session activity");
   const activityText=activity.length?"\n\n**Recent activity**\n"+activity.map(entry=>"• "+eventLabel(entry.event,entry.actor_id,entry.other_id)+" · <t:"+Math.floor(entry.created_at/1000)+":R>").join("\n"):"\n\nNo session activity yet.";
@@ -134,7 +134,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   let body;
   if(tab==="roles")body=roles;
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
-  else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nCommands: /link-chaster · /chaster-link-status · /unlink-chaster";
+  else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
   else if(tab==="commands")body="**Command directory**\nCommands are shown when your current server permissions and configured roles allow them.\n\n"+(commandDirectory||"No commands available for your current roles and permissions.");
   else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
   else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not assigned")+(settings.wearer_role_id?"":" · Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\nActive wearer locks: "+personalLocks.length+"\nActive keyholder locks: "+keyholderLocks.length+(lockLoadError?"\nLock data: unavailable":"")+"\n\nChoose a tab below to see details.";
@@ -364,7 +364,7 @@ if(i.customId.startsWith('dashaccount:')){
   }
   if(action==='sync'){
     await i.deferReply({ephemeral:true});
-    try{const result=await syncUserRoles(i.client,i.user.id);await i.editReply(result.message+'\\n\\nReturn to the Account tab and press Refresh to update the dashboard.');}
+    try{const result=await syncUserRoles(i.client,i.user.id);await i.editReply(result.message+'\n\nReturn to the Account tab and press Refresh to update the dashboard.');}
     catch(error){await i.editReply(error.message||'Role synchronization failed.');}
     return true;
   }
