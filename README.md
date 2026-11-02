@@ -7,7 +7,7 @@ Independent Discord companion for Chaster using the official Public API.
 - OAuth 2 authorization-code exchange and refresh-token flow
 - AES-256-GCM encrypted OAuth token storage in SQLite
 - Personal lock status, keyholder lock listing and Chaster profile
-- Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views
+- Read-only shared lock, private conversation/message, calendar, notification-count/channel-health and favorite-status views; add/remove shared-lock favorites
 - Calendar lock-period event creation, editing and confirmation-protected deletion
 - Shared-lock details and tags, extension catalogue, Explore categories, calendar statistics, blocked-user and ignored-user lists
 - Achievement and community-event categories, lock-statistics reset configuration, API health, public user locks and profile completeness
@@ -51,7 +51,7 @@ Official documentation:
 /chaster-profile, /shared-locks, /chaster-conversations, /chaster-calendar, /chaster-notifications
 /lock-details, /lock-seal, /keyholder-notes, /chaster-settings, /permission-catalog
 /chaster-user-overview, /chaster-user-stats, /chaster-achievements, /chaster-badges, /lock-history, /keyholder-applications
-/chaster-conversation, /chaster-messages, /shared-lock-favorite, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all
+/chaster-conversation, /chaster-messages, /shared-lock-favorite, /shared-lock-favorite-add, /shared-lock-favorite-remove, /chaster-notification-health, /chaster-notification-read, /chaster-notifications-read-all
 /shared-lock-details, /shared-lock-tags, /chaster-extensions, /chaster-explore-categories, /chaster-calendar-stats, /chaster-blocks
 /chaster-achievement-categories, /chaster-ignored-users, /chaster-lock-stats-config, /chaster-community-categories, /chaster-api-health
 /chaster-public-locks, /chaster-profile-completeness
