@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,createSessionInvite,recordPrivateSession,setGuildRoles,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert,pauseNotificationChannel,getNotificationChannelPause,isNotificationChannelPaused,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,createSessionInvite,deleteSessionInvite,recordPrivateSession,setGuildRoles,setNotificationRetentionDays,pruneDiscordNotificationQueue} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -194,4 +194,20 @@ test("member dashboard session data is scoped to the member and server",()=>{
   assert.equal(data.invites[0].inviter_id,partner);
   assert.equal(getMemberSessionDashboard(guild,outsider).sessions.length,0);
   assert.equal(getMemberSessionDashboard(otherGuild,member).sessions.length,0);
+});
+
+
+test("session invitations can only be cancelled by a participant in the same server",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="session-cancel-guild-"+suffix;
+  const otherGuild=guild+"-other";
+  const inviter="session-cancel-inviter-"+suffix;
+  const invitee="session-cancel-invitee-"+suffix;
+  const outsider="session-cancel-outsider-"+suffix;
+  const inviteId="session-cancel-invite-"+suffix;
+  createSessionInvite(inviteId,guild,"channel",inviter,invitee,Date.now()+600000);
+  assert.equal(deleteSessionInvite(inviteId,otherGuild,inviter),false);
+  assert.equal(deleteSessionInvite(inviteId,guild,outsider),false);
+  assert.equal(deleteSessionInvite(inviteId,guild,invitee),true);
+  assert.equal(deleteSessionInvite(inviteId,guild,inviter),false);
 });
