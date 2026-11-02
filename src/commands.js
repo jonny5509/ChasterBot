@@ -106,16 +106,16 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
       lockLoadError=error.code==="CHASTER_REAUTH_REQUIRED"?"Chaster requires you to reconnect with /link-chaster.":error.code==="CHASTER_RATE_LIMITED"?"Chaster is rate limiting requests. Try Refresh shortly.":"Live lock data is temporarily unavailable. Try Refresh shortly.";
     }
   }
-  const lockSection=(heading,locks)=>heading+"\\n"+(locks.length?locks.slice(0,5).map(lockLine).join("\\n"):"No active locks returned.");
+  const lockSection=(heading,locks)=>heading+"\\n"+(locks.length?locks.slice(0,3).map(lockLine).join("\\n"):"No active locks returned.");
   const liveLocks=lockLoadError?"**Live lock data**\\n"+lockLoadError:
     "**Live Chaster locks**\\n"+lockSection("**Wearer locks**",personalLocks)+"\\n\\n"+lockSection("**Keyholder locks**",keyholderLocks);
   const data=getMemberSessionDashboard(guild.id,user.id);
   const sessions=[];
   for(const session of data.sessions){
     const thread=await guild.channels.fetch(session.thread_id).catch(()=>null);
-    if(thread&&!thread.archived)sessions.push("<#"+session.thread_id+"> · <@"+(session.inviter_id===user.id?session.invitee_id:session.inviter_id)+">");
+    if(thread&&!thread.archived)if(sessions.length<5)sessions.push("<#"+session.thread_id+"> · <@"+(session.inviter_id===user.id?session.invitee_id:session.inviter_id)+">");
   }
-  const invites=data.invites.map(inv=>inv.invitee_id===user.id?"Incoming invitation from <@"+inv.inviter_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>":"Invitation sent to <@"+inv.invitee_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>");
+  const invites=data.invites.slice(0,5).map(inv=>inv.invitee_id===user.id?"Incoming invitation from <@"+inv.inviter_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>":"Invitation sent to <@"+inv.invitee_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>");
   const title="**ChasterBot dashboard · "+guild.name+"**";
   const account="**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy"):"Not linked · use /link-chaster");
   const roles="**Your server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id)+"\n\nUse /sync-roles to refresh your Chaster-derived roles.";
