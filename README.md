@@ -65,6 +65,10 @@ Use HTTPS, a persistent host and secret manager; lock down database permissions;
 2. In Server Settings > Roles, create the Wearer and Keyholder roles. Move the bot's role above both.
 3. Run `/configure-roles wearer:@Wearer keyholder:@Keyholder` as a member with Manage Roles. Role sync checks linked Chaster accounts every 10 minutes; users can run `/sync-roles` themselves.
 4. The role sync assigns Wearer when the linked account has an active personal lock and Keyholder when the account has active keyholder locks. Both roles can be assigned. It removes the configured role when no active locks are found.
+5. Role-gated commands: `/lock-status` requires the Wearer role; `/keyholder-locks` and `/time-change` require the Keyholder role. The bot checks membership when a command runs and checks the Keyholder role again when a time-change confirmation is submitted. `/sync-roles`, account linking, profiles and community commands remain available as appropriate.
 5. Run `/session-channel channel:#private-sessions` as an admin. Both participants link Chaster, then one runs `/session-invite user:@OtherMember`. The other participant must accept the DM invite before the bot creates a private thread and adds both people. This invite flow confirms both users linked Chaster and consented to the Discord session; it does not yet independently prove that the two Chaster accounts are paired on the same lock.
 
 Discord bots cannot join ordinary group DMs. Private threads are the supported bot-accessible alternative. They are visible only to invited thread members and server staff with appropriate permissions. Keep the parent channel's permissions restricted.
+
+
+Discord does not support dynamically hiding individual slash commands based on a member’s custom server roles. These role-specific commands may still appear in the command picker, but ChasterBot enforces the role check when they are invoked and responds ephemerally if the member lacks the required role.
