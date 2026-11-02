@@ -34,3 +34,8 @@ export function getExtensions(token){return chasterRequest("/extensions",{token}
 export function getExploreCategories(token){return chasterRequest("/explore/categories",{token});}
 export function getCalendarStatistics(token){return chasterRequest("/user-profile/calendar-statistics",{token});}
 export function getBlockedUsers(token){return chasterRequest("/blocks",{token});}
+export function getAchievementCategories(token){return chasterRequest("/achievements/categories",{token});}
+export function getIgnoredUsers(token){return chasterRequest("/messaging/ignored-users",{token});}
+export function getLockStatsResetConfig(token){return chasterRequest("/lock-stats/reset-config",{token});}
+export function getCommunityEventCategories(token){return chasterRequest("/community-event/categories",{token});}
+export function getApiHealth(token){return chasterRequest("/health",{token});}
