@@ -124,14 +124,13 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const eventLabel=(event,actor,other)=>({invited:"<@"+actor+"> invited <@"+other+">",accepted:"<@"+actor+"> accepted <@"+other+">’s invitation",declined:"<@"+actor+"> declined <@"+other+">’s invitation",cancelled:"<@"+actor+"> cancelled an invitation to <@"+other+">",created:"Private session created for <@"+actor+"> and <@"+other+">",closed:"<@"+actor+"> closed the private session with <@"+other+">"}[event]||"Session activity");
   const activityText=activity.length?"\n\n**Recent activity**\n"+activity.map(entry=>"• "+eventLabel(entry.event,entry.actor_id,entry.other_id)+" · <t:"+Math.floor(entry.created_at/1000)+":R>").join("\n"):"\n\nNo session activity yet.";
   const sessionText="**Your private sessions**\n"+(sessions.length?sessions.join("\n"):"No active private sessions found")+(invites.length?"\n\n**Pending invitations**\n"+invites.join("\n"):"\n\nNo pending invitations.")+activityText;
-  const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not conf  const commandDirectory=getDashboardCommandGroups(commands.map(command=>command.toJSON().name),{
+  const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured");
+  const commandDirectory=getDashboardCommandGroups(commands.map(command=>command.toJSON().name),{
     hasWearerRole:Boolean(settings.wearer_role_id&&member.roles.cache.has(settings.wearer_role_id)),
     hasKeyholderRole:Boolean(settings.keyholder_role_id&&member.roles.cache.has(settings.keyholder_role_id)),
     canManageGuild:member.permissions.has(PermissionFlagsBits.ManageGuild),
     canManageRoles:member.permissions.has(PermissionFlagsBits.ManageRoles)
   }).map(group=>"**"+group.heading+"**\\n"+group.commands.map(name=>"`/"+name+"`").join(" · ")).join("\\n\\n");
->"`/"+name+"`").join(" · "):"";
-  }).filter(Boolean).join("\n\n");
   let body;
   if(tab==="roles")body=roles;
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
