@@ -135,13 +135,14 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   if(tab==="roles")body=roles;
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
   else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
+  else if(tab==="keyholder")body=keyholderLocks.length?"**Keyholder tools**\n"+lockSection("**Locks you keyhold**",keyholderLocks)+"\n\nUse the buttons below to view or delete private notes, or propose a time change. Every operation rechecks your configured Keyholder role and Chaster lock ownership.":"**Keyholder tools**\nNo keyheld locks were found, or your Chaster account is not connected. You need the configured Keyholder role and a trusted Chaster keyholder lock to use these actions.";
   else if(tab==="commands")body="**Command directory**\nCommands are shown when your current server permissions and configured roles allow them.\n\n"+(commandDirectory||"No commands available for your current roles and permissions.");
   else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
   else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not assigned")+(settings.wearer_role_id?"":" · Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\nActive wearer locks: "+personalLocks.length+"\nActive keyholder locks: "+keyholderLocks.length+(lockLoadError?"\nLock data: unavailable":"")+"\n\nChoose a tab below to see details.";
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["commands","Commands"]];
+  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["commands","Commands"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const rows=[];
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
@@ -154,6 +155,14 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     actions.push(new ButtonBuilder().setCustomId("dashaccount:link:"+userId).setLabel(linked?"Reconnect Chaster":"Link Chaster").setStyle(ButtonStyle.Success));
     if(linked)actions.push(new ButtonBuilder().setCustomId("dashaccount:unlink:"+userId).setLabel("Unlink account").setStyle(ButtonStyle.Danger));
     actions.push(new ButtonBuilder().setCustomId("dashaccount:sync:"+userId).setLabel("Sync roles").setStyle(ButtonStyle.Primary));
+    rows.push(new ActionRowBuilder().addComponents(...actions));
+  }
+  if(tab==="keyholder"){
+    const actions=[
+      new ButtonBuilder().setCustomId("dashkeyholder:notes:"+userId).setLabel("View lock notes").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashkeyholder:delete-notes:"+userId).setLabel("Delete lock notes").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary)
+    ];
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
   if(tab==="sessions"){
@@ -425,13 +434,33 @@ const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
 return true;
 }
+if(i.customId.startsWith("dashkeyholder:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+  const settings=getRoleSettings().find(x=>x.guild_id===i.guildId);
+  const member=await i.guild.members.fetch(i.user.id).catch(()=>null);
+  if(!settings?.keyholder_role_id||!member?.roles.cache.has(settings.keyholder_role_id)){await i.reply({ephemeral:true,content:"You need the server's configured Keyholder role to use these controls. Sync roles from the Account tab if you believe this is incorrect."});return true;}
+  const title=action==="notes"?"View keyholder notes":action==="delete-notes"?"Delete keyholder notes":"Propose a keyholder time change";
+  const modal=new ModalBuilder().setCustomId("dashkeyholder-submit:"+action+":"+userId).setTitle(title);
+  const lockInput=new TextInputBuilder().setCustomId("lock_id").setLabel("Chaster lock ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100);
+  const fields=[new ActionRowBuilder().addComponents(lockInput)];
+  if(action==="time"){
+    const seconds=new TextInputBuilder().setCustomId("seconds").setLabel("Seconds to add or remove (max 86400)") .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(7).setPlaceholder("3600 or -3600");
+    const reason=new TextInputBuilder().setCustomId("reason").setLabel("Reason for the change").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(160);
+    fields.push(new ActionRowBuilder().addComponents(seconds),new ActionRowBuilder().addComponents(reason));
+  }
+  modal.addComponents(...fields);
+  await i.showModal(modal);
+  return true;
+}
 if(i.customId.startsWith("dashboard:")){
 const parts=i.customId.split(":");
 const action=parts[1],tab=action==="refresh"?parts[2]:action,userId=action==="refresh"?parts[3]:parts[2];
 if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
 if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
 const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-const allowedTabs=["overview","roles","sessions","account","commands","admin"];
+const allowedTabs=["overview","roles","sessions","account","keyholder","commands","admin"];
 const selected=allowedTabs.includes(tab)?tab:"overview";
 if(selected==="admin"&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to view this tab."});return true;}
 const content=await buildMemberDashboard(i.guild,i.user,admin,selected);
@@ -475,6 +504,53 @@ return true;
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
 
 export async function handleModal(i){
+  if(i.customId.startsWith("dashkeyholder-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+    const settings=getRoleSettings().find(x=>x.guild_id===i.guildId);
+    const member=await i.guild.members.fetch(i.user.id).catch(()=>null);
+    if(!settings?.keyholder_role_id||!member?.roles.cache.has(settings.keyholder_role_id)){await i.reply({ephemeral:true,content:"Your configured Keyholder role is no longer present. No Chaster request was made."});return true;}
+    const lockId=i.fields.getTextInputValue("lock_id").trim();
+    if(!lockId||lockId.length>100){await i.reply({ephemeral:true,content:"Enter a valid Chaster lock ID."});return true;}
+    await i.deferReply({ephemeral:true});
+    try{
+      const token=await accessToken(i.user.id);
+      const raw=await getKeyholderLocks(token);
+      const locks=Array.isArray(raw)?raw:(raw?.locks||[]);
+      const lock=locks.find(x=>String(x._id||x.id)===lockId);
+      if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("That lock is not in your trusted Chaster keyholder lock list. No action was taken.");
+      if(action==="notes"){
+        const notes=await getKeyholderNotes(lockId,token);
+        const output=typeof notes==="string"?notes:JSON.stringify(notes,null,2);
+        await i.editReply("**Keyholder notes · "+String(lock.title||lockId)+"**\\n"+(output||"No notes returned.").slice(0,1700));
+        return true;
+      }
+      if(action==="delete-notes"){
+        const nonce=randomUUID();
+        pending.set(nonce,{user:i.user.id,lockId,guildId:i.guildId,kind:"keyholder-note-delete",created:Date.now()});
+        const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("knd:"+nonce).setLabel("Confirm delete notes").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("knx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));
+        await i.editReply({content:"**Confirm deletion of private keyholder notes**\\n"+String(lock.title||lockId)+"\\nThis cannot be undone. No deletion occurs unless you confirm.",components:[row]});
+        return true;
+      }
+      if(action==="time"){
+        const secondsText=i.fields.getTextInputValue("seconds").trim();
+        if(!/^-?\\d+$/.test(secondsText))throw new Error("Seconds must be a whole number.");
+        const seconds=Number(secondsText);
+        if(!Number.isSafeInteger(seconds)||seconds===0||Math.abs(seconds)>86400)throw new Error("Choose a non-zero value between -86400 and 86400 seconds.");
+        const reason=i.fields.getTextInputValue("reason").trim();
+        if(!reason)throw new Error("A reason is required.");
+        const nonce=randomUUID();
+        pending.set(nonce,{user:i.user.id,lockId,seconds,reason,guildId:i.guildId,kind:"time-change",created:Date.now()});
+        const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("tc:"+nonce).setLabel("Confirm time change").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("tx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));
+        await i.editReply({content:"**Confirm Chaster time change**\\n"+String(lock.title||lockId)+"\\n"+(seconds>0?"Add ":"Remove ")+Math.abs(seconds)+" seconds\\nReason: "+reason+"\\nNo change occurs unless you press Confirm.",components:[row]});
+        return true;
+      }
+      await i.editReply("Unknown Keyholder action.");
+    }catch(error){await i.editReply(error.message||"The Keyholder action failed.");}
+    return true;
+  }
+
   if(!i.customId.startsWith('dashsessioninvite-submit:'))return false;
   const userId=i.customId.split(':')[1];
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:'This dashboard belongs to another member.'});return true;}
