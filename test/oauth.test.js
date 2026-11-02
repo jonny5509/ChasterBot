@@ -1,7 +1,23 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {createAuthorizationUrl} from "../src/oauth.js";
+import {createAuthorizationUrl,OAUTH_SCOPES} from "../src/oauth.js";
 import {consumeOAuthState} from "../src/db.js";
+
+
+test("OAuth requests only the granular scopes used by bot features",()=>{
+  assert.deepEqual(OAUTH_SCOPES,[
+    "profile","profile:read","users:read",
+    "locks:read","locks:write",
+    "shared_locks:read","shared_locks:write",
+    "keyholder:read","keyholder:write",
+    "messaging:read",
+    "notifications:read","notifications:write",
+    "calendar:read","calendar:write"
+  ]);
+  for(const unused of ["profile:write","users:write","messaging:write","posts:read","posts:write"]){
+    assert.equal(OAUTH_SCOPES.includes(unused),false,unused+" should not be requested");
+  }
+});
 
 test("OAuth authorization URL binds a random one-time state to the Discord user",()=>{
   const previous={
@@ -19,6 +35,7 @@ test("OAuth authorization URL binds a random one-time state to the Discord user"
     assert.equal(url.searchParams.get("client_id"),"test-client");
     assert.equal(url.searchParams.get("redirect_uri"),process.env.CHASTER_REDIRECT_URI);
     assert.equal(url.searchParams.get("response_type"),"code");
+    assert.deepEqual(url.searchParams.get("scope").split(" "),OAUTH_SCOPES);
     const state=url.searchParams.get("state");
     assert.match(state,/^[a-f0-9]{64}$/);
     assert.equal(consumeOAuthState(state),discordId);
