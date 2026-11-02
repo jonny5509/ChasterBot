@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {notificationRetryDelay,isPermanentDiscordDeliveryError} from "../src/notifications.js";
-import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats} from "../src/db.js";
+import {enqueueDiscordNotification,getDueDiscordNotifications,markDiscordNotificationSent,setNotificationOptIn,getNotificationPreference,getNotificationChannel,setNotificationChannel,markDiscordNotificationFailed,getFailedDiscordNotifications,retryFailedDiscordNotification,getDiscordNotificationQueueStats,getGuildForNotificationChannel,claimNotificationAdminAlert} from "../src/db.js";
 
 test("notification retry delay grows exponentially and is capped",()=>{
   assert.equal(notificationRetryDelay(0),5000);
@@ -65,4 +65,19 @@ test("failed channel notifications are visible and retryable only by their own s
   const retried=getDueDiscordNotifications(100).find(x=>x.id===queued.id);
   assert.equal(retried.attempts,0);
   assert.equal(retried.last_error,"");
+});
+
+
+test("notification failure alerts resolve the owning server and enforce a six-hour cooldown",()=>{
+  const suffix=Date.now()+"-"+Math.random();
+  const guild="notification-alert-guild-"+suffix;
+  const channel="notification-alert-channel-"+suffix;
+  const now=Date.now();
+  setNotificationChannel(guild,channel,"test-admin");
+  assert.equal(getGuildForNotificationChannel(channel),guild);
+  assert.equal(getGuildForNotificationChannel("unknown-"+suffix),null);
+  assert.equal(claimNotificationAdminAlert(guild,now),true);
+  assert.equal(claimNotificationAdminAlert(guild,now+60*60*1000),false);
+  assert.equal(claimNotificationAdminAlert(guild,now+6*60*60*1000),true);
+  assert.equal(claimNotificationAdminAlert(guild+"-other",now+6*60*60*1000),true);
 });
