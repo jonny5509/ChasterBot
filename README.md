@@ -40,7 +40,18 @@ Independent Discord companion for Chaster using the official Public API.
 Never commit .env or share Discord tokens, Chaster secrets, access/refresh tokens or AI API keys. Losing the encryption key makes saved OAuth tokens unreadable.
 
 ## OAuth scopes requested
-profile, profile:read/write, users:read/write, locks:read/write, shared_locks:read/write, keyholder:read/write, messaging:read/write, notifications:read/write, calendar:read/write, posts:read/write. Users must relink and approve the expanded consent request.
+ChasterBot requests only the scopes used by its current features:
+
+- `profile`, `profile:read`: account identity and profile/statistics views
+- `users:read`: blocked-user and public-lock lookups
+- `locks:read`, `locks:write`: personal locks, lock history/seals, time changes and lock-related actions
+- `shared_locks:read`, `shared_locks:write`: shared-lock views, favorites and archiving
+- `keyholder:read`, `keyholder:write`: keyholder lock and notes operations
+- `messaging:read`: conversations and messages (the bot does not request permission to send messages)
+- `notifications:read`, `notifications:write`: notification views and read actions
+- `calendar:read`, `calendar:write`: calendar event views and edits
+
+The bot does not request profile editing, user writing, messaging writing or post-management scopes. If you linked ChasterBot before this scope reduction, run `/link-chaster` again and approve the updated consent screen; existing access/refresh tokens do not automatically gain newly requested scopes.
 
 Official documentation:
 - https://docs.chaster.app/api/basics/getting-started/
