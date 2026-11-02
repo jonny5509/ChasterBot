@@ -219,7 +219,7 @@ const days=i.options.getInteger("period")??7;
 const r=getDiscordNotificationDeliveryReport(i.guildId,days);
 const rate=r.successRate===null?"Not available (no completed deliveries)":r.successRate+"%";
 const avg=r.completed?r.averageAttempts.toFixed(2):"—";
-return i.reply({ephemeral:true,content:"**Notification delivery report · last "+days+" days**\\nSuccess rate: **"+rate+"**\\nSent: "+r.sent+" · Failed: "+r.failed+" · Pending: "+r.pending+"\\nAverage attempts per completed delivery: "+avg+"\\nSuccess rate counts sent vs. failed deliveries; pending items are excluded. No message contents or destination IDs are shown."});
+return i.reply({ephemeral:true,content:"**Notification delivery report · last "+days+" days**\\nSuccess rate: **"+rate+"**\\nSent: "+r.sent+" · Failed: "+r.failed+" · Pending: "+r.pending+"\\nAverage attempts per completed delivery: "+avg+"\\nSuccess rate counts sent vs. failed deliveries; pending items are excluded. Results are limited to records still within your configured retention period. No message contents or destination IDs are shown."});
 }
 if(n==="notification-history"){
 
