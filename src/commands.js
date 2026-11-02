@@ -1,4 +1,4 @@
-import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType} from "discord.js";
+import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,ModalBuilder,TextInputBuilder,TextInputStyle} from "discord.js";
 import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
@@ -318,7 +318,37 @@ if(n==="dice"){const sides=i.options.getInteger("sides")??6;return i.reply("🎲
 if(n==="keyholder-chat"){await i.deferReply();return i.editReply(await keyholderReply(i.options.getString("message",true),i.user.username));}
 if(n==="audit"){const a=recentAudit(i.guildId,10);return i.reply({ephemeral:true,content:a.length?a.map(x=>"• <t:"+Math.floor(new Date(x.created_at+" UTC").getTime()/1000)+":R> <@"+x.actor_id+"> — "+x.action+": "+x.details).join("\n"):"No audit entries yet."});}
 }
+async function sendDashboardSessionInvite(i,rawMemberId){
+  const memberId=String(rawMemberId||'').replaceAll('<','').replaceAll('>','').replaceAll('@','').replaceAll('!','').trim();
+  if(memberId.length<15||memberId.length>22||![...memberId].every(ch=>ch>='0'&&ch<='9'))throw new Error('Enter a valid Discord member ID or mention.');
+  if(memberId===i.user.id)throw new Error('You cannot invite yourself.');
+  const other=await i.guild.members.fetch(memberId).catch(()=>null);
+  if(!other||other.user.bot)throw new Error('Choose another human member of this server.');
+  if(!getLinkedAccount(i.user.id)||!getLinkedAccount(other.id))throw new Error('Both participants must link their Chaster accounts first using /link-chaster.');
+  const parent=getSessionChannel(i.guildId);
+  if(!parent)throw new Error('An admin must configure a session channel first. An admin can do this in the Admin dashboard.');
+  const channel=await i.guild.channels.fetch(parent).catch(()=>null);
+  if(!channel||channel.type!==ChannelType.GuildText)throw new Error('The configured session channel is unavailable.');
+  const id=randomUUID();
+  createSessionInvite(id,i.guildId,parent,i.user.id,other.id,Date.now()+600000);
+  const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('session-accept:'+id).setLabel('Accept private session').setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId('session-decline:'+id).setLabel('Decline').setStyle(ButtonStyle.Secondary));
+  const dm=await other.send({content:'<@'+i.user.id+'> invited you to a private ChasterBot session in **'+i.guild.name+'**. Both of you must have linked Chaster accounts. This invitation expires in 10 minutes.',components:[row],allowedMentions:{users:[i.user.id]}}).catch(()=>null);
+  if(!dm){deleteSessionInvite(id,i.guildId,i.user.id);throw new Error('I could not DM that member. They may need to enable server-member DMs.');}
+  recordSessionActivity(i.guildId,i.user.id,other.id,'invited',{inviteId:id});
+  return 'Invitation sent by DM to '+other.user.username+'. It expires in 10 minutes.';
+}
 export async function handleButton(i){
+if(i.customId.startsWith('dashsessioninvite:')){
+  const userId=i.customId.split(':')[1];
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:'This dashboard belongs to another member.'});return true;}
+  if(!i.guild){await i.reply({ephemeral:true,content:'Open the dashboard from a server.'});return true;}
+  const modal=new ModalBuilder().setCustomId('dashsessioninvite-submit:'+userId).setTitle('Invite a session participant');
+  const memberInput=new TextInputBuilder().setCustomId('member_id').setLabel('Discord member ID or @mention').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32).setPlaceholder('123456789012345678');
+  modal.addComponents(new ActionRowBuilder().addComponents(memberInput));
+  await i.showModal(modal);
+  return true;
+}
+
 if(i.customId.startsWith("dashclose:")){
 const [,threadId,userId]=i.customId.split(":");
 if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -395,3 +425,15 @@ catch(e){await i.followUp({ephemeral:true,content:"Chaster did not confirm delet
 return true;
 }
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
+
+export async function handleModal(i){
+  if(!i.customId.startsWith('dashsessioninvite-submit:'))return false;
+  const userId=i.customId.split(':')[1];
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:'This dashboard belongs to another member.'});return true;}
+  if(!i.guild){await i.reply({ephemeral:true,content:'Open the dashboard from a server.'});return true;}
+  try{
+    const message=await sendDashboardSessionInvite(i,i.fields.getTextInputValue('member_id'));
+    await i.reply({ephemeral:true,content:message});
+  }catch(error){await i.reply({ephemeral:true,content:error.message||'The invitation could not be sent.'});}
+  return true;
+}
