@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS audit_logs(id INTEGER PRIMARY KEY AUTOINCREMENT,guild
 CREATE TABLE IF NOT EXISTS challenges(id INTEGER PRIMARY KEY AUTOINCREMENT,guild_id TEXT NOT NULL,title TEXT NOT NULL,points INTEGER NOT NULL DEFAULT 10,active INTEGER NOT NULL DEFAULT 1,created_by TEXT NOT NULL,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS challenge_entries(challenge_id INTEGER NOT NULL,discord_id TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'joined',created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(challenge_id,discord_id),FOREIGN KEY(challenge_id) REFERENCES challenges(id));
 CREATE TABLE IF NOT EXISTS linked_accounts(discord_id TEXT PRIMARY KEY,chaster_user_id TEXT NOT NULL,username TEXT,encrypted_tokens TEXT NOT NULL,scopes TEXT NOT NULL DEFAULT '',expires_at INTEGER NOT NULL,linked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
+CREATE TABLE IF NOT EXISTS chaster_link_health(discord_id TEXT PRIMARY KEY,status TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',last_notified_at INTEGER,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS oauth_states(state TEXT PRIMARY KEY,discord_id TEXT NOT NULL,expires_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS notification_optins(guild_id TEXT NOT NULL,discord_id TEXT NOT NULL,enabled INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(guild_id,discord_id));
 CREATE TABLE IF NOT EXISTS lock_snapshots(discord_id TEXT NOT NULL,lock_id TEXT NOT NULL,fingerprint TEXT NOT NULL,updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(discord_id,lock_id));
@@ -47,3 +48,12 @@ export function setSessionChannel(g,c,a){db.prepare("INSERT INTO guild_settings(
 export function getSessionChannel(g){return db.prepare("SELECT session_channel_id FROM guild_settings WHERE guild_id=?").get(g)?.session_channel_id??null;}
 export function createSessionInvite(id,g,c,from,to,expires){db.prepare("INSERT INTO session_invites(id,guild_id,channel_id,inviter_id,invitee_id,expires_at) VALUES (?,?,?,?,?,?)").run(id,g,c,from,to,expires);}
 export function consumeSessionInvite(id){const x=db.prepare("SELECT * FROM session_invites WHERE id=?").get(id);db.prepare("DELETE FROM session_invites WHERE id=?").run(id);return x&&x.expires_at>Date.now()?x:null;}
+
+export function markChasterLinkNeedsReauth(id,reason="authorization rejected"){
+  const previous=db.prepare("SELECT status,last_notified_at FROM chaster_link_health WHERE discord_id=?").get(id);
+  const shouldNotify=!previous||previous.status!=="needs_reauth"||!previous.last_notified_at||Date.now()-previous.last_notified_at>86400000;
+  db.prepare("INSERT INTO chaster_link_health(discord_id,status,reason,last_notified_at) VALUES (?,'needs_reauth',?,?) ON CONFLICT(discord_id) DO UPDATE SET status='needs_reauth',reason=excluded.reason,last_notified_at=CASE WHEN ? THEN excluded.last_notified_at ELSE chaster_link_health.last_notified_at END,updated_at=CURRENT_TIMESTAMP").run(id,String(reason).slice(0,120),shouldNotify?Date.now():null,shouldNotify?1:0);
+  return shouldNotify;
+}
+export function clearChasterLinkHealth(id){db.prepare("DELETE FROM chaster_link_health WHERE discord_id=?").run(id);}
+export function getChasterLinkHealth(id){return db.prepare("SELECT status,reason,updated_at FROM chaster_link_health WHERE discord_id=?").get(id)??null;}
