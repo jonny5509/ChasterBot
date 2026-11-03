@@ -49,7 +49,19 @@ export function deleteLinkedAccount(u){db.prepare("DELETE FROM linked_accounts W
 export function getLockSnapshot(u,l){return db.prepare("SELECT fingerprint FROM lock_snapshots WHERE discord_id=? AND lock_id=?").get(u,l)?.fingerprint??null;}
 export function setLockSnapshot(u,l,f){db.prepare("INSERT INTO lock_snapshots(discord_id,lock_id,fingerprint) VALUES (?,?,?) ON CONFLICT(discord_id,lock_id) DO UPDATE SET fingerprint=excluded.fingerprint,updated_at=CURRENT_TIMESTAMP").run(u,l,f);}
 export function audit(g,u,a,d=""){db.prepare("INSERT INTO audit_logs(guild_id,actor_id,action,details) VALUES (?,?,?,?)").run(g??null,u,a,String(d).slice(0,1000));}
-export function recentAudit(g,l=10){return db.prepare("SELECT actor_id,action,details,created_at FROM audit_logs WHERE guild_id=? ORDER BY id DESC LIMIT ?").all(g,l);}
+export function recentAudit(g,l=10,filters={}){
+  const where=["guild_id=?"],params=[String(g)];
+  const action=String(filters.action||"").trim().slice(0,80);
+  const actor=String(filters.actorId||"").trim();
+  const search=String(filters.search||"").trim().slice(0,120);
+  const days=Number(filters.days)||0;
+  if(action){where.push("action LIKE ?");params.push("%"+action+"%");}
+  if(actor){where.push("actor_id=?");params.push(actor);}
+  if(search){where.push("(action LIKE ? OR details LIKE ?)");params.push("%"+search+"%","%"+search+"%");}
+  if([1,7,30,90].includes(days)){where.push("created_at>=datetime('now', ?)");params.push("-"+days+" days");}
+  const limit=Math.max(1,Math.min(500,Number(l)||10));
+  return db.prepare("SELECT id,actor_id,action,details,created_at FROM audit_logs WHERE "+where.join(" AND ")+" ORDER BY id DESC LIMIT ?").all(...params,limit);
+}
 
 export function setGuildRoles(g,w,k,a){db.prepare("INSERT INTO guild_settings(guild_id,wearer_role_id,keyholder_role_id) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET wearer_role_id=excluded.wearer_role_id,keyholder_role_id=excluded.keyholder_role_id,updated_at=CURRENT_TIMESTAMP").run(g,w??null,k??null);audit(g,a,"role_configured","wearer="+(w||"none")+", keyholder="+(k||"none"));}
 export function getRoleSettings(){return db.prepare("SELECT guild_id,wearer_role_id,keyholder_role_id FROM guild_settings WHERE wearer_role_id IS NOT NULL OR keyholder_role_id IS NOT NULL").all();}
