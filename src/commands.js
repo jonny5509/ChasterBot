@@ -647,7 +647,7 @@ export async function handleModal(i){
           const raw=i.fields.getTextInputValue(id).trim();
           if(!raw)return undefined;
           if(raw.toLowerCase()==="none")return null;
-          if(!/^\\d{17,20}$/.test(raw))throw new Error("Role IDs must be valid Discord IDs or 'none'.");
+          if(!/^\d{17,20}$/.test(raw))throw new Error("Role IDs must be valid Discord IDs or 'none'.");
           const role=await i.guild.roles.fetch(raw).catch(()=>null);
           if(!role)throw new Error("Role "+raw+" was not found in this server.");
           const me=await i.guild.members.fetchMe();
