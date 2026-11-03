@@ -71,11 +71,10 @@ export function startRoleSyncPolling(client){
   const run=async()=>{
     if(busy)return;
     busy=true;
-    const accounts=getAllLinkedAccounts();
-    const startedAt=Date.now();
     let succeeded=0,failed=0,lastError="";
-    recordRoleSyncStarted(accounts.length,intervalMinutes,startedAt);
     try{
+      const accounts=getAllLinkedAccounts();
+      recordRoleSyncStarted(accounts.length,intervalMinutes,Date.now());
       for(const account of accounts){
         try{await syncUserRoles(client,account.discord_id);succeeded++;}
         catch(e){
@@ -89,7 +88,8 @@ export function startRoleSyncPolling(client){
       lastError=String(e?.message||"Role sync scheduler failed").slice(0,500);
       console.error("Role sync cycle failed:",lastError);
     }finally{
-      recordRoleSyncCompleted({succeeded,failed,lastError,now:Date.now()});
+      try{recordRoleSyncCompleted({succeeded,failed,lastError,now:Date.now()});}
+      catch(e){console.error("Could not persist role sync health:",e?.message||"unknown error");}
       busy=false;
       setTimeout(run,intervalMs);
     }
