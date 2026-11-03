@@ -176,7 +176,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["wearer","Wearer"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["community","Community"],["conversations","Messages"],["commands","Commands"]];
+  const tabs=[["overview","Overview"],["sessions","Sessions"],["account","Account"],["wearer","Wearer"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["community","Community"],["conversations","Messages"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const rows=[];
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
@@ -215,9 +215,9 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:status-roles:"+userId).setLabel("Lock status roles").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:minimum-lock:"+userId).setLabel("Minimum lock duration").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashadmin:status-roles:"+userId).setLabel("Lock status roles").setStyle(ButtonStyle.Secondary)
     ));
+    rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashadmin:minimum-lock:"+userId).setLabel("Minimum lock duration").setStyle(ButtonStyle.Secondary)));
   }
   if(tab==="community"){
     const actions=[new ButtonBuilder().setCustomId("dashcommunity:create:"+userId).setLabel("Create challenge").setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId("dashcommunity:join:"+userId).setLabel("Join challenge").setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId("dashcommunity:approve:"+userId).setLabel("Approve entry").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:reward:"+userId).setLabel("Add reward idea").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:punishment:"+userId).setLabel("Add optional consequence").setStyle(ButtonStyle.Secondary)];
