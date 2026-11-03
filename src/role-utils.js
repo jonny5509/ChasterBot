@@ -24,3 +24,24 @@ export function getLockStatusRoleState(value){
     active:locks.some(lock=>String(lock?.status||"").toLowerCase()==="active")
   };
 }
+
+function lockStartTimestamp(lock){
+  for(const key of ["lockedAt","startedAt","startDate","createdAt","created_at"]){
+    const value=lock?.[key];
+    if(value===undefined||value===null||value==="")continue;
+    const numeric=typeof value==="number"||/^\\d+(?:\\.\\d+)?$/.test(String(value))?Number(value):NaN;
+    const timestamp=Number.isFinite(numeric)?(numeric<1e12?numeric*1000:numeric):Date.parse(value);
+    if(Number.isFinite(timestamp)&&timestamp>0)return timestamp;
+  }
+  return null;
+}
+export function hasMinimumLockedDuration(value,minimumHours,now=Date.now()){
+  const hours=Number(minimumHours);
+  if(!Number.isFinite(hours)||hours<=0)return false;
+  const threshold=hours*60*60*1000;
+  return normalizeLockRows(value).some(lock=>{
+    if(String(lock?.status||"").toLowerCase()!=="locked")return false;
+    const started=lockStartTimestamp(lock);
+    return started!==null&&now-started>=threshold;
+  });
+}
