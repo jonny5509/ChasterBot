@@ -493,6 +493,18 @@ const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
 return true;
 }
+if(i.customId.startsWith("dashadmin:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to manage dashboard settings."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashadmin-submit:"+action+":"+userId).setTitle(action==="settings"?"Configure server dashboard":"Retry failed delivery");
+  const field=(id,label,required,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setRequired(required).setMaxLength(max));
+  if(action==="settings"){
+    modal.addComponents(field("wearer_role","Wearer role ID (or none)",false,25),field("keyholder_role","Keyholder role ID (or none)",false,25),field("session_channel","Session channel ID (or none)",false,25),field("notification_channel","Notification channel ID (or none)",false,25),field("retention","Notification retention: 7, 30 or 90",false,2));
+  }else if(action==="retry")modal.addComponents(field("queue_id","Failed notification queue ID",true,12));
+  else{await i.reply({ephemeral:true,content:"Unknown admin action."});return true;}
+  await i.showModal(modal);return true;
+}
 if(i.customId.startsWith("dashcommunity:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
