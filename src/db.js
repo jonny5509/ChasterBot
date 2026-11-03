@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS discord_notification_queue(id INTEGER PRIMARY KEY AUT
 CREATE TABLE IF NOT EXISTS notification_admin_alerts(guild_id TEXT PRIMARY KEY,last_alert_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS notification_channel_pauses(guild_id TEXT PRIMARY KEY,channel_id TEXT NOT NULL,reason TEXT NOT NULL,paused_at INTEGER NOT NULL);
 `);
-for (const sql of ["ALTER TABLE guild_settings ADD COLUMN wearer_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN keyholder_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN session_channel_id TEXT","ALTER TABLE guild_settings ADD COLUMN notification_retention_days INTEGER NOT NULL DEFAULT 30"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes("duplicate column")) throw e; } }
+for (const sql of ["ALTER TABLE guild_settings ADD COLUMN wearer_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN keyholder_role_id TEXT","ALTER TABLE guild_settings ADD COLUMN session_channel_id TEXT","ALTER TABLE guild_settings ADD COLUMN notification_retention_days INTEGER NOT NULL DEFAULT 30","ALTER TABLE guild_settings ADD COLUMN role_sync_enabled INTEGER NOT NULL DEFAULT 1","ALTER TABLE guild_settings ADD COLUMN role_remove_inactive INTEGER NOT NULL DEFAULT 1"]) { try { db.exec(sql); } catch (e) { if (!String(e.message).includes("duplicate column")) throw e; } }
 export function ensureProfile(user){db.prepare("INSERT INTO profiles(discord_id,display_name) VALUES (?,?) ON CONFLICT(discord_id) DO UPDATE SET display_name=excluded.display_name").run(user.id,user.username);return db.prepare("SELECT * FROM profiles WHERE discord_id=?").get(user.id);}
 export function addPoints(id,name,points){db.prepare("INSERT OR IGNORE INTO profiles(discord_id,display_name) VALUES (?,?)").run(id,name);db.prepare("UPDATE profiles SET points=MAX(0,points+?) WHERE discord_id=?").run(points,id);}
 export function leaderboard(limit=10){return db.prepare("SELECT discord_id,display_name,points FROM profiles ORDER BY points DESC,display_name COLLATE NOCASE LIMIT ?").all(limit);}
@@ -64,7 +64,11 @@ export function recentAudit(g,l=10,filters={}){
 }
 
 export function setGuildRoles(g,w,k,a){db.prepare("INSERT INTO guild_settings(guild_id,wearer_role_id,keyholder_role_id) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET wearer_role_id=excluded.wearer_role_id,keyholder_role_id=excluded.keyholder_role_id,updated_at=CURRENT_TIMESTAMP").run(g,w??null,k??null);audit(g,a,"role_configured","wearer="+(w||"none")+", keyholder="+(k||"none"));}
-export function getRoleSettings(){return db.prepare("SELECT guild_id,wearer_role_id,keyholder_role_id FROM guild_settings WHERE wearer_role_id IS NOT NULL OR keyholder_role_id IS NOT NULL").all();}
+export function getRoleSettings(){return db.prepare("SELECT guild_id,wearer_role_id,keyholder_role_id,role_sync_enabled,role_remove_inactive FROM guild_settings WHERE wearer_role_id IS NOT NULL OR keyholder_role_id IS NOT NULL").all();}
+export function setGuildRoleAutomation(guildId,{enabled=true,removeInactive=true},actorId){
+  db.prepare("INSERT INTO guild_settings(guild_id,role_sync_enabled,role_remove_inactive) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET role_sync_enabled=excluded.role_sync_enabled,role_remove_inactive=excluded.role_remove_inactive,updated_at=CURRENT_TIMESTAMP").run(String(guildId),enabled?1:0,removeInactive?1:0);
+  audit(guildId,actorId,"role_automation_configured","sync="+Boolean(enabled)+", remove_inactive="+Boolean(removeInactive));
+}
 export function setSessionChannel(g,c,a){db.prepare("INSERT INTO guild_settings(guild_id,session_channel_id) VALUES (?,?,?) ON CONFLICT(guild_id) DO UPDATE SET session_channel_id=excluded.session_channel_id,updated_at=CURRENT_TIMESTAMP").run(g,c);audit(g,a,"session_channel_configured",c);}
 export function getSessionChannel(g){return db.prepare("SELECT session_channel_id FROM guild_settings WHERE guild_id=?").get(g)?.session_channel_id??null;}
 export function recordSessionActivity(guildId,actorId,otherId,event,{inviteId=null,threadId=null}={}){db.prepare("INSERT INTO session_activity(guild_id,invite_id,thread_id,actor_id,other_id,event,created_at) VALUES (?,?,?,?,?,?,?)").run(String(guildId),inviteId?String(inviteId):null,threadId?String(threadId):null,String(actorId),String(otherId),event,Date.now());}
@@ -83,7 +87,7 @@ export function getMemberSessionDashboard(guildId,discordId){
   return {sessions,invites};
 }
 export function getGuildRoleSettings(guildId){
-  return db.prepare("SELECT wearer_role_id,keyholder_role_id FROM guild_settings WHERE guild_id=?").get(String(guildId))??{wearer_role_id:null,keyholder_role_id:null};
+  return db.prepare("SELECT wearer_role_id,keyholder_role_id,role_sync_enabled,role_remove_inactive FROM guild_settings WHERE guild_id=?").get(String(guildId))??{wearer_role_id:null,keyholder_role_id:null,role_sync_enabled:1,role_remove_inactive:1};
 }
 
 export function markChasterLinkNeedsReauth(id,reason="authorization rejected"){
