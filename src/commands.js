@@ -253,8 +253,8 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
   if(tab==="sessions"){
     const data=getMemberSessionDashboard(guild.id,userId);
     const actions=[new ButtonBuilder().setCustomId("dashsessioninvite:"+userId).setLabel("Invite member").setStyle(ButtonStyle.Success)];
-    data.sessions.forEach((session,index)=>actions.push(new ButtonBuilder().setCustomId("dashclose:"+session.thread_id+":"+userId).setLabel("Close session "+(index+1)).setStyle(ButtonStyle.Danger)));
-    data.invites.forEach((invite,index)=>actions.push(new ButtonBuilder().setCustomId("dashinvite:"+invite.id+":"+userId).setLabel((invite.inviter_id===userId?"Cancel invite ":"Decline invite ")+(index+1)).setStyle(ButtonStyle.Secondary)));
+    data.sessions.forEach((session,index)=>{if(actions.length<10)actions.push(new ButtonBuilder().setCustomId("dashclose:"+session.thread_id+":"+userId).setLabel("Close session "+(index+1)).setStyle(ButtonStyle.Danger));});
+    data.invites.forEach((invite,index)=>{if(actions.length<10)actions.push(new ButtonBuilder().setCustomId("dashinvite:"+invite.id+":"+userId).setLabel((invite.inviter_id===userId?"Cancel invite ":"Decline invite ")+(index+1)).setStyle(ButtonStyle.Secondary));});
     for(let i=0;i<actions.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...actions.slice(i,i+5)));
   }
   return rows;
