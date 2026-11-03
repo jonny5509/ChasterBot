@@ -95,14 +95,15 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const linkHealth=getChasterLinkHealth(user.id);
   const settings=getGuildRoleSettings(guild.id);
   const roleLabel=(roleId)=>{if(!roleId)return "Not configured";const role=guild.roles.cache.get(roleId);return role?role.name+" ("+(member.roles.cache.has(roleId)?"assigned":"not assigned")+")":"Configured role missing";};
-  let personalLocks=[],keyholderLocks=[],lockLoadError=!linked?"Link your Chaster account using the button below to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account using the button below to load live locks.":null;
-  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account"||tab==="keyholder")){
+  let personalLocks=[],keyholderLocks=[],sharedLocks=[],lockLoadError=!linked?"Link your Chaster account using the button below to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account using the button below to load live locks.":null;
+  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account"||tab==="keyholder"||tab==="wearer")){
     try{
       const token=await accessToken(user.id);
       const [personalRaw,keyholderRaw]=await Promise.all([getMyLocks(token),getKeyholderLocks(token)]);
       const asList=(raw,...keys)=>Array.isArray(raw)?raw:keys.map(key=>raw?.[key]).find(Array.isArray)||[];
       personalLocks=asList(personalRaw,"locks","items","data").filter(lock=>!["ended","unlocked","expired","cancelled"].includes(String(lock.status||"").toLowerCase()));
       keyholderLocks=asList(keyholderRaw,"locks","items","data").filter(lock=>!["ended","unlocked","expired","cancelled"].includes(String(lock.status||"").toLowerCase()));
+      if(tab==="wearer"){const sharedRaw=await getSharedLocks(token);sharedLocks=asList(sharedRaw,"locks","items","sharedLocks","data");}
     }catch(error){
       lockLoadError=error.code==="CHASTER_REAUTH_REQUIRED"?"Chaster requires you to reconnect with /link-chaster.":error.code==="CHASTER_RATE_LIMITED"?"Chaster is rate limiting requests. Try Refresh shortly.":"Live lock data is temporarily unavailable. Try Refresh shortly.";
     }
@@ -143,6 +144,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   if(tab==="roles")body=roles;
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
   else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
+  else if(tab==="wearer")body="**Wearer tools**\nYour shared locks\n"+(sharedLocks.length?sharedLocks.slice(0,8).map(lock=> "• **"+String(lock.title||lock.name||"Shared lock").slice(0,55)+"** · ID: `"+String(lock._id||lock.id||"unknown")+"`").join("\n"):"No shared locks returned.")+"\n\nUse the controls below for lock history, details/seal status, favourites, archive, public profiles and Chaster statistics/discovery. All lookups are private to you.";
   else if(tab==="keyholder")body=lockLoadError?"**Keyholder tools**\n"+lockLoadError:keyholderLocks.length?"**Keyholder tools**\n"+lockSection("**Locks you keyhold**",keyholderLocks)+"\n\nUse the buttons below to view or delete private notes, or propose a time change. Every operation rechecks your configured Keyholder role and Chaster lock ownership.":"**Keyholder tools**\nNo keyheld locks were found, or your Chaster account is not connected. You need the configured Keyholder role and a trusted Chaster keyholder lock to use these actions.";
   else if(tab==="community"){
     const challenges=listChallenges(guild.id),rewards=listRewardItems(guild.id,"reward"),punishments=listRewardItems(guild.id,"punishment");
@@ -175,7 +177,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["community","Community"],["conversations","Messages"],["commands","Commands"]];
+  const tabs=[["overview","Overview"],["sessions","Sessions"],["account","Account"],["wearer","Wearer"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["community","Community"],["conversations","Messages"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const rows=[];
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
@@ -190,11 +192,29 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     actions.push(new ButtonBuilder().setCustomId("dashaccount:sync:"+userId).setLabel("Sync roles").setStyle(ButtonStyle.Primary));
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
+  if(tab==="wearer"){
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashwearer:history:"+userId).setLabel("Lock history").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dashwearer:details:"+userId).setLabel("Lock / seal / shared details").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:profile:"+userId).setLabel("Public profile").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:public-locks:"+userId).setLabel("Public locks").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:my-stats:"+userId).setLabel("My stats & explore").setStyle(ButtonStyle.Success)
+    ));
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashwearer:fav-check:"+userId).setLabel("Check favourite").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:fav-add:"+userId).setLabel("Add favourite").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("dashwearer:fav-remove:"+userId).setLabel("Remove favourite").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("dashwearer:archive:"+userId).setLabel("Archive shared lock").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("dashwearer:public-stats:"+userId).setLabel("Public user stats").setStyle(ButtonStyle.Secondary)
+    ));
+  }
   if(tab==="keyholder"){
     const actions=[
       new ButtonBuilder().setCustomId("dashkeyholder:notes:"+userId).setLabel("View lock notes").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashkeyholder:delete-notes:"+userId).setLabel("Delete lock notes").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dashkeyholder:applications:"+userId).setLabel("View applications").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashpersona:chat:"+userId).setLabel("Keyholder chat").setStyle(ButtonStyle.Success)
     ];
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
@@ -204,13 +224,14 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:status-roles:"+userId).setLabel("Lock status roles").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:minimum-lock:"+userId).setLabel("Minimum lock duration").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashadmin:status-roles:"+userId).setLabel("Lock status roles").setStyle(ButtonStyle.Secondary)
     ));
+    rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashadmin:minimum-lock:"+userId).setLabel("Minimum lock duration").setStyle(ButtonStyle.Secondary)));
   }
   if(tab==="community"){
     const actions=[new ButtonBuilder().setCustomId("dashcommunity:create:"+userId).setLabel("Create challenge").setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId("dashcommunity:join:"+userId).setLabel("Join challenge").setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId("dashcommunity:approve:"+userId).setLabel("Approve entry").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:reward:"+userId).setLabel("Add reward idea").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:punishment:"+userId).setLabel("Add optional consequence").setStyle(ButtonStyle.Secondary)];
     rows.push(new ActionRowBuilder().addComponents(...actions));
+    if(isAdmin)rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashcommunity:award:"+userId).setLabel("Award points").setStyle(ButtonStyle.Primary)));
   }
   if(tab==="conversations"){
     rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashconversation:open:"+userId).setLabel("Open conversation").setStyle(ButtonStyle.Primary)));
@@ -219,20 +240,23 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     const enabled=getNotificationPreference(guild.id,userId);
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashnotify:toggle:"+userId).setLabel(enabled?"Pause server updates":"Resume server updates").setStyle(enabled?ButtonStyle.Secondary:ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("dashnotify:read-all:"+userId).setLabel("Mark Chaster notifications read").setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId("dashnotify:read-all:"+userId).setLabel("Mark all read").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dashnotify:read-one:"+userId).setLabel("Mark one read").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashnotify:health:"+userId).setLabel("Chaster notification health").setStyle(ButtonStyle.Secondary)
     ));
   }
   if(tab==="calendar"){
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashcalendar:add:"+userId).setLabel("Create calendar event").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("dashcalendar:edit:"+userId).setLabel("Edit calendar event").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("dashcalendar:delete:"+userId).setLabel("Delete calendar event").setStyle(ButtonStyle.Danger)
     ));
   }
   if(tab==="sessions"){
     const data=getMemberSessionDashboard(guild.id,userId);
     const actions=[new ButtonBuilder().setCustomId("dashsessioninvite:"+userId).setLabel("Invite member").setStyle(ButtonStyle.Success)];
-    data.sessions.forEach((session,index)=>actions.push(new ButtonBuilder().setCustomId("dashclose:"+session.thread_id+":"+userId).setLabel("Close session "+(index+1)).setStyle(ButtonStyle.Danger)));
-    data.invites.forEach((invite,index)=>actions.push(new ButtonBuilder().setCustomId("dashinvite:"+invite.id+":"+userId).setLabel((invite.inviter_id===userId?"Cancel invite ":"Decline invite ")+(index+1)).setStyle(ButtonStyle.Secondary)));
+    data.sessions.forEach((session,index)=>{if(actions.length<10)actions.push(new ButtonBuilder().setCustomId("dashclose:"+session.thread_id+":"+userId).setLabel("Close session "+(index+1)).setStyle(ButtonStyle.Danger));});
+    data.invites.forEach((invite,index)=>{if(actions.length<10)actions.push(new ButtonBuilder().setCustomId("dashinvite:"+invite.id+":"+userId).setLabel((invite.inviter_id===userId?"Cancel invite ":"Decline invite ")+(index+1)).setStyle(ButtonStyle.Secondary));});
     for(let i=0;i<actions.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...actions.slice(i,i+5)));
   }
   return rows;
@@ -405,7 +429,17 @@ async function sendDashboardSessionInvite(i,rawMemberId){
   if(memberId===i.user.id)throw new Error('You cannot invite yourself.');
   const other=await i.guild.members.fetch(memberId).catch(()=>null);
   if(!other||other.user.bot)throw new Error('Choose another human member of this server.');
-  if(!getLinkedAccount(i.user.id)||!getLinkedAccount(other.id))throw new Error('Both participants must link their Chaster accounts first using /link-chaster.');
+  if(!getLinkedAccount(i.user.id)||!getLinkedAccount(other.id))throw new Error('Both participants must link their Chaster accounts first using the Account tab in /dashboard.');
+  const roleSettings=getRoleSettings().find(x=>x.guild_id===i.guildId);
+  if(!roleSettings?.wearer_role_id||!roleSettings?.keyholder_role_id)throw new Error('This server must configure both Wearer and Keyholder roles before matching invitations can be sent.');
+  const sender=await i.guild.members.fetch(i.user.id).catch(()=>null);
+  const senderWearer=Boolean(sender?.roles.cache.has(roleSettings.wearer_role_id));
+  const senderKeyholder=Boolean(sender?.roles.cache.has(roleSettings.keyholder_role_id));
+  const otherWearer=Boolean(other.roles.cache.has(roleSettings.wearer_role_id));
+  const otherKeyholder=Boolean(other.roles.cache.has(roleSettings.keyholder_role_id));
+  const complementary=(senderWearer&&otherKeyholder)||(senderKeyholder&&otherWearer);
+  if(!complementary)throw new Error('Matching invitations are only allowed between a Wearer and a Keyholder. You need the configured role, and the recipient must have the opposite role.');
+  if((senderWearer&&senderKeyholder)||(otherWearer&&otherKeyholder))throw new Error('For safety, matching requires each participant to have exactly one of the configured roles. Ask a server admin to resolve dual-role assignments first.');
   const parent=getSessionChannel(i.guildId);
   if(!parent)throw new Error('An admin must configure a session channel first. An admin can do this in the Admin dashboard.');
   const channel=await i.guild.channels.fetch(parent).catch(()=>null);
@@ -497,6 +531,50 @@ const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
 return true;
 }
+if(i.customId.startsWith("dashwearer:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+  const settings=getRoleSettings().find(x=>x.guild_id===i.guildId);
+  const member=await i.guild.members.fetch(i.user.id).catch(()=>null);
+  if(!settings?.wearer_role_id||!member?.roles.cache.has(settings.wearer_role_id)){await i.reply({ephemeral:true,content:"Your configured Wearer role is not present. Link Chaster and refresh your roles from the Account tab; an admin may need to configure the Wearer role."});return true;}
+  if(action==="my-stats"||action==="catalog"){
+    await i.deferReply({ephemeral:true});
+    try{
+      const token=await accessToken(i.user.id);let raw;
+      if(action==="my-stats"){
+        const profile=await getCurrentProfile(token),id=String(profile.id||profile._id||"");
+        const [stats,achievements,badges,calendar,extensions,categories,tags,blocks,ignored,settingsData,permissions,achievementCategories,communityCategories]=await Promise.all([getUserProfileStatistics(profile.username||id,token),id?getUserAchievements(id,token):Promise.resolve(null),getUserBadgeCount(token),getCalendarStatistics(token),getExtensions(token),getExploreCategories(token),getSharedLockTags(token),getBlockedUsers(token),getIgnoredUsers(token),getChasterSettings(token),getPermissionDefinitions(token),getAchievementCategories(token),getCommunityEventCategories(token)]);
+        raw={profile,statistics:stats,achievements,badges,calendar,extensions,categories,sharedLockTags:tags,blockedUsers:blocks,ignoredUsers:ignored,chasterSettings:settingsData,permissionDefinitions:permissions,achievementCategories,communityCategories};
+      }else{
+        const [extensions,categories,tags,achievementCategories,communityCategories]=await Promise.all([getExtensions(token),getExploreCategories(token),getSharedLockTags(token),getAchievementCategories(token),getCommunityEventCategories(token)]);
+        raw={extensions,categories,sharedLockTags:tags,achievementCategories,communityCategories};
+      }
+      await i.editReply("**"+(action==="my-stats"?"Your Chaster profile and statistics":"Chaster discovery catalogue")+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
+    }catch(error){await i.editReply("Could not load Chaster data: "+(error.message||"request failed"));}
+    return true;
+  }
+  const labels={history:"Lock history",details:"Lock details, seal or shared lock",profile:"Public Chaster profile", "public-locks":"Public Chaster locks","fav-check":"Check shared-lock favourite","fav-add":"Add shared-lock favourite","fav-remove":"Remove shared-lock favourite","archive":"Archive shared lock","public-stats":"Public user statistics"};
+  const fields={history:["lock_id","Your Chaster lock ID"],details:["lock_id","Lock ID, or shared:ID / seal:ID"],profile:["username","Chaster username"],"public-locks":["user_id","Chaster user ID"],"fav-check":["shared_lock_id","Shared lock ID"],"fav-add":["shared_lock_id","Shared lock ID"],"fav-remove":["shared_lock_id","Shared lock ID"],archive:["shared_lock_id","Shared lock ID"],"public-stats":["username","Chaster username"]};
+  const spec=fields[action];if(!spec){await i.reply({ephemeral:true,content:"Unknown Wearer action."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashwearer-submit:"+action+":"+userId).setTitle(labels[action]);
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(spec[0]).setLabel(spec[1]).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+  await i.showModal(modal);return true;
+}
+if(i.customId.startsWith("dashpersona:chat:")){
+  const userId=i.customId.split(":")[2];
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashpersona-submit:"+userId).setTitle("Keyholder chat");
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("message").setLabel("Your message").setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(700)));
+  await i.showModal(modal);return true;
+}
+if(i.customId.startsWith("dashkeyholder:")&&i.customId.includes(":applications:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashkeyholder-submit:applications:"+userId).setTitle("Keyholder applications");
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("lock_id").setLabel("Chaster lock ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+  await i.showModal(modal);return true;
+}
 if(i.customId.startsWith("dashadmin:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -522,12 +600,13 @@ if(i.customId.startsWith("dashcommunity:")){
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
   if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
   const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-  if(["create","approve","reward","punishment"].includes(action)&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to perform this community action."});return true;}
-  const modal=new ModalBuilder().setCustomId("dashcommunity-submit:"+action+":"+userId).setTitle(({create:"Create challenge",join:"Join challenge",approve:"Approve challenge entry",reward:"Add reward idea",punishment:"Add optional consequence"})[action]||"Community action");
+  if(["create","approve","reward","punishment","award"].includes(action)&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to perform this community action."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashcommunity-submit:"+action+":"+userId).setTitle(({create:"Create challenge",join:"Join challenge",approve:"Approve challenge entry",reward:"Add reward idea",punishment:"Add optional consequence",award:"Award community points"})[action]||"Community action");
   const field=(id,label,style=TextInputStyle.Short,required=true,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(required).setMaxLength(max));
   if(action==="create")modal.addComponents(field("title","Challenge title",TextInputStyle.Short,true,100),field("points","Points (1–100)",TextInputStyle.Short,true,3));
   else if(action==="join")modal.addComponents(field("challenge_id","Challenge ID",TextInputStyle.Short,true,10));
   else if(action==="approve")modal.addComponents(field("challenge_id","Challenge ID",TextInputStyle.Short,true,10),field("member_id","Member Discord ID",TextInputStyle.Short,true,25));
+  else if(action==="award")modal.addComponents(field("member_id","Member Discord ID",TextInputStyle.Short,true,25),field("points","Points to add or remove (-100 to 100)",TextInputStyle.Short,true,4),field("reason","Reason for this adjustment",TextInputStyle.Short,true,160));
   else modal.addComponents(field("title",action==="reward"?"Reward title":"Consequence title",TextInputStyle.Short,true,60),field("description","Description (voluntary, safe and non-financial)",TextInputStyle.Paragraph,true,250));
   await i.showModal(modal);return true;
 }
@@ -550,22 +629,29 @@ if(i.customId.startsWith("dashnotify:")){
     await i.update({content,components:buildDashboardComponents(i.guild,i.user.id,admin,"notifications")});
     return true;
   }
-  if(action==="read-all"){
+  if(action==="read-all"||action==="health"){
     await i.deferReply({ephemeral:true});
-    try{const token=await accessToken(i.user.id);await markAllNotificationsRead(token);await i.editReply("Chaster accepted the mark-all-as-read request.");}
-    catch(error){await i.editReply("Could not mark Chaster notifications as read: "+error.message);}
+    try{const token=await accessToken(i.user.id);const raw=action==="read-all"?await markAllNotificationsRead(token):await getNotificationChannelHealth(token);await i.editReply(action==="read-all"?"Chaster accepted the mark-all-as-read request.":"**Chaster notification health**\n"+JSON.stringify(raw,null,2).slice(0,1600));}
+    catch(error){await i.editReply("Could not complete the notification action: "+error.message);}
     return true;
+  }
+  if(action==="read-one"){
+    const modal=new ModalBuilder().setCustomId("dashnotify-submit:read-one:"+userId).setTitle("Mark Chaster notification read");
+    modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("notification_id").setLabel("Chaster notification ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+    await i.showModal(modal);return true;
   }
 }
 if(i.customId.startsWith("dashcalendar:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
-  const modal=new ModalBuilder().setCustomId("dashcalendar-submit:"+action+":"+userId).setTitle(action==="add"?"Create calendar event":"Delete calendar event");
+  const modal=new ModalBuilder().setCustomId("dashcalendar-submit:"+action+":"+userId).setTitle(action==="add"?"Create calendar event":action==="edit"?"Edit calendar event":"Delete calendar event");
   const fields=[];
-  if(action==="add"){
-    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("start").setLabel("Start date/time (ISO 8601)").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(40).setPlaceholder("2026-11-05T18:00:00Z")));
+  if(action==="add"||action==="edit"){
+    if(action==="edit")fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("event_id").setLabel("Calendar event ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("start").setLabel("Start date/time (ISO 8601; optional for edit)").setStyle(TextInputStyle.Short).setRequired(action==="add").setMaxLength(40).setPlaceholder("2026-11-05T18:00:00Z")));
     fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("end").setLabel("End date/time (optional ISO 8601)").setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(40)));
     fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("description").setLabel("Description (optional)").setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)));
+    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("all_day").setLabel("All day? yes or no").setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(3).setPlaceholder("no")));
   }else fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("event_id").setLabel("Calendar event ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
   modal.addComponents(...fields);await i.showModal(modal);return true;
 }
@@ -639,6 +725,62 @@ return true;
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
 
 export async function handleModal(i){
+  if(i.customId.startsWith("dashwearer-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+    const settings=getRoleSettings().find(x=>x.guild_id===i.guildId),member=await i.guild.members.fetch(i.user.id).catch(()=>null);
+    if(!settings?.wearer_role_id||!member?.roles.cache.has(settings.wearer_role_id)){await i.reply({ephemeral:true,content:"Your configured Wearer role is no longer present. No Chaster request was made."});return true;}
+    const id=i.fields.getTextInputValue(({history:"lock_id",details:"lock_id",profile:"username","public-locks":"user_id","shared-details":"shared_lock_id"})[action]).trim();
+    if(!id||id.length>100){await i.reply({ephemeral:true,content:"Enter a valid Chaster ID or username."});return true;}
+    await i.deferReply({ephemeral:true});
+    try{
+      const token=await accessToken(i.user.id);let raw;
+      if(action==="history"){
+        const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);
+        if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No history request was made.");
+        raw=await getLockHistory(id,token);
+      }else if(action==="details"){
+        if(id.startsWith("shared:")){const sharedId=id.slice(7),own=await getSharedLocks(token);if(!sharedId||!isOwnedResourceListed(own,sharedId,["items","locks","sharedLocks","data"],"_id","id"))throw new Error("That shared lock is not in your own shared-lock list. No details request was made.");raw=await getSharedLockDetails(sharedId,token);}
+        else if(id.startsWith("seal:")){const lockId=id.slice(5),own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);if(!locks.some(lock=>String(lock._id||lock.id)===lockId))throw new Error("That lock is not in your own wearer lock list. No seal request was made.");raw=await getLockSeal(lockId,token);}
+        else {const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No details request was made.");raw=await getLockDetails(id,token);}
+      }else if(action==="profile")raw=await getUserProfileOverview(id,token);
+      else if(action==="public-locks")raw=await getPublicLocks(id,token);
+      else if(action==="public-stats")raw=await getUserProfileStatistics(id,token);
+      else if(["fav-check","fav-add","fav-remove","archive"].includes(action)){
+        const own=await getSharedLocks(token);
+        if(!isOwnedResourceListed(own,id,["items","locks","sharedLocks","data"],"_id","id"))throw new Error("That shared lock is not in your own shared-lock list. No action was taken.");
+        if(action==="fav-check")raw=await getSharedLockFavorite(id,token);
+        else if(action==="fav-add"){raw=await addSharedLockFavorite(id,token);}
+        else if(action==="fav-remove"){raw=await removeSharedLockFavorite(id,token);}
+        else {const nonce=randomUUID();pending.set(nonce,{user:i.user.id,sharedLockId:id,created:Date.now(),kind:"shared-lock-archive"});const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("sa:"+nonce).setLabel("Confirm archive").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("sx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));await i.editReply({content:"Archive your shared lock "+id+"? This may hide it from active shared-lock listings. No change occurs unless you confirm.",components:[row]});return true;}
+      }else throw new Error("Unknown Wearer action.");
+      await i.editReply("**Chaster "+action+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
+    }catch(error){await i.editReply("Could not complete this Chaster lookup: "+(error.message||"request failed"));}
+    return true;
+  }
+  if(i.customId.startsWith("dashpersona-submit:")){
+    const userId=i.customId.split(":")[1];
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    const message=i.fields.getTextInputValue("message").trim();
+    if(!message){await i.reply({ephemeral:true,content:"Enter a message."});return true;}
+    await i.deferReply({ephemeral:true});
+    try{await i.editReply(await keyholderReply(message,i.user.username));}
+    catch(error){await i.editReply("Keyholder chat is unavailable: "+(error.message||"request failed"));}
+    return true;
+  }
+  if(i.customId.startsWith("dashnotify-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    if(action==="read-one"){
+      const id=i.fields.getTextInputValue("notification_id").trim();
+      if(!id||id.length>100){await i.reply({ephemeral:true,content:"Enter a valid notification ID."});return true;}
+      await i.deferReply({ephemeral:true});
+      try{const token=await accessToken(i.user.id);await markNotificationRead(id,token);await i.editReply("Chaster accepted the mark-as-read request.");}
+      catch(error){await i.editReply("Could not mark the notification as read: "+error.message);}
+      return true;
+    }
+  }
   if(i.customId.startsWith("dashadmin-submit:")){
     const [,action,userId]=i.customId.split(":");
     if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -770,6 +912,16 @@ export async function handleModal(i){
         const points=approveChallenge(Number(idText),memberId,i.user.id,i.guildId);
         if(points===null)throw new Error("No pending entry was found for that member and active challenge.");
         message="Approved completion for "+member.user.username+"; awarded "+points+" points.";
+      }else if(action==="award"){
+        const memberId=i.fields.getTextInputValue("member_id").trim(),pointsText=i.fields.getTextInputValue("points").trim(),reason=i.fields.getTextInputValue("reason").trim();
+        if(!/^\d{17,20}$/.test(memberId)||!(/^-?\d+$/.test(pointsText))||!reason)throw new Error("Enter a valid member ID, whole-number points and a reason.");
+        const points=Number(pointsText);
+        if(!Number.isInteger(points)||points < -100||points > 100)throw new Error("Points must be between -100 and 100.");
+        const member=await i.guild.members.fetch(memberId).catch(()=>null);
+        if(!member)throw new Error("That member is not in this server.");
+        addPoints(member.id,member.user.username,points);
+        audit(i.guildId,i.user.id,"points_awarded",member.id+" "+points+" points: "+reason);
+        message="Updated "+member.user.username+"’s score by "+points+" points.";
       }else if(action==="reward"||action==="punishment"){
         const title=i.fields.getTextInputValue("title").trim(),description=i.fields.getTextInputValue("description").trim();
         if(!title||!description)throw new Error("A title and description are required.");
@@ -805,11 +957,26 @@ export async function handleModal(i){
       const start=new Date(i.fields.getTextInputValue("start").trim());
       const endText=i.fields.getTextInputValue("end").trim();
       const end=endText?new Date(endText):null;
-      const description=i.fields.getTextInputValue("description").trim();
+      const description=i.fields.getTextInputValue("description").trim(),allDayText=i.fields.getTextInputValue("all_day").trim().toLowerCase();
+      if(allDayText&&!["yes","no"].includes(allDayText)){await i.reply({ephemeral:true,content:"All day must be yes or no."});return true;}
       if(!Number.isFinite(start.getTime())||(endText&&(!Number.isFinite(end.getTime())||end<=start))){await i.reply({ephemeral:true,content:"Use valid ISO 8601 dates; the optional end must be later than the start."});return true;}
       await i.deferReply({ephemeral:true});
-      try{const data={type:"lock_period",startDate:start.toISOString(),...(end?{endDate:end.toISOString()}:{}),...(description?{description}:{})};const result=await createCalendarEvent(data,token);await i.editReply("Chaster accepted the calendar event creation request.\n"+JSON.stringify(result).slice(0,1000));}
+      try{const data={type:"lock_period",startDate:start.toISOString(),...(end?{endDate:end.toISOString()}:{}),...(description?{description}:{}),...(allDayText?{isAllDay:allDayText==="yes"}:{})};const result=await createCalendarEvent(data,token);await i.editReply("Chaster accepted the calendar event creation request.\n"+JSON.stringify(result).slice(0,1000));}
       catch(error){await i.editReply("Could not create the calendar event: "+error.message);}
+      return true;
+    }
+    if(action==="edit"){
+      const eventId=i.fields.getTextInputValue("event_id").trim(),startText=i.fields.getTextInputValue("start").trim(),endText=i.fields.getTextInputValue("end").trim(),description=i.fields.getTextInputValue("description").trim(),allDayText=i.fields.getTextInputValue("all_day").trim().toLowerCase();
+      if(allDayText&&!["yes","no"].includes(allDayText)){await i.reply({ephemeral:true,content:"All day must be yes or no."});return true;}
+      if(!eventId||eventId.length>100||(!startText&&!endText&&!description&&!allDayText)){await i.reply({ephemeral:true,content:"Enter an event ID and at least one field to update."});return true;}
+      const data={};
+      if(startText){const d=new Date(startText);if(!Number.isFinite(d.getTime())){await i.reply({ephemeral:true,content:"Start date must be valid ISO 8601."});return true;}data.startDate=d.toISOString();}
+      if(endText){const d=new Date(endText);if(!Number.isFinite(d.getTime())){await i.reply({ephemeral:true,content:"End date must be valid ISO 8601."});return true;}data.endDate=d.toISOString();}
+      if(data.startDate&&data.endDate&&new Date(data.endDate)<=new Date(data.startDate)){await i.reply({ephemeral:true,content:"End date must be later than start date."});return true;}
+      if(description)data.description=description;if(allDayText)data.isAllDay=allDayText==="yes";
+      await i.deferReply({ephemeral:true});
+      try{const own=await getCalendarEvents(token);if(!isOwnedResourceListed(own,eventId,["items","events","data"],"_id","id","eventId","event_id"))throw new Error("That event is not in your own calendar. No update request was made.");const result=await updateCalendarEvent(eventId,data,token);await i.editReply("Chaster accepted the calendar event update.\n"+JSON.stringify(result).slice(0,900));}
+      catch(error){await i.editReply("Could not update the calendar event: "+error.message);}
       return true;
     }
     if(action==="delete"){
@@ -842,6 +1009,11 @@ export async function handleModal(i){
       const locks=Array.isArray(raw)?raw:(raw?.locks||[]);
       const lock=locks.find(x=>String(x._id||x.id)===lockId);
       if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("That lock is not in your trusted Chaster keyholder lock list. No action was taken.");
+      if(action==="applications"){
+        const applications=await getKeyholderApplications(lockId,token);
+        await i.editReply("**Keyholder applications · "+String(lock.title||lockId)+"**\n```json\n"+JSON.stringify(applications,null,2).replace(/@/g,"＠").slice(0,1650)+"\n```");
+        return true;
+      }
       if(action==="notes"){
         const notes=await getKeyholderNotes(lockId,token);
         const output=typeof notes==="string"?notes:JSON.stringify(notes,null,2);
