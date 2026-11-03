@@ -211,6 +211,7 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
   if(tab==="community"){
     const actions=[new ButtonBuilder().setCustomId("dashcommunity:create:"+userId).setLabel("Create challenge").setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId("dashcommunity:join:"+userId).setLabel("Join challenge").setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId("dashcommunity:approve:"+userId).setLabel("Approve entry").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:reward:"+userId).setLabel("Add reward idea").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:punishment:"+userId).setLabel("Add optional consequence").setStyle(ButtonStyle.Secondary)];
     rows.push(new ActionRowBuilder().addComponents(...actions));
+    if(isAdmin)rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashcommunity:award:"+userId).setLabel("Award points").setStyle(ButtonStyle.Primary)));
   }
   if(tab==="conversations"){
     rows.push(new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("dashconversation:open:"+userId).setLabel("Open conversation").setStyle(ButtonStyle.Primary)));
@@ -522,12 +523,13 @@ if(i.customId.startsWith("dashcommunity:")){
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
   if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
   const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
-  if(["create","approve","reward","punishment"].includes(action)&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to perform this community action."});return true;}
-  const modal=new ModalBuilder().setCustomId("dashcommunity-submit:"+action+":"+userId).setTitle(({create:"Create challenge",join:"Join challenge",approve:"Approve challenge entry",reward:"Add reward idea",punishment:"Add optional consequence"})[action]||"Community action");
+  if(["create","approve","reward","punishment","award"].includes(action)&&!admin){await i.reply({ephemeral:true,content:"You need Manage Server to perform this community action."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashcommunity-submit:"+action+":"+userId).setTitle(({create:"Create challenge",join:"Join challenge",approve:"Approve challenge entry",reward:"Add reward idea",punishment:"Add optional consequence",award:"Award community points"})[action]||"Community action");
   const field=(id,label,style=TextInputStyle.Short,required=true,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(style).setRequired(required).setMaxLength(max));
   if(action==="create")modal.addComponents(field("title","Challenge title",TextInputStyle.Short,true,100),field("points","Points (1–100)",TextInputStyle.Short,true,3));
   else if(action==="join")modal.addComponents(field("challenge_id","Challenge ID",TextInputStyle.Short,true,10));
   else if(action==="approve")modal.addComponents(field("challenge_id","Challenge ID",TextInputStyle.Short,true,10),field("member_id","Member Discord ID",TextInputStyle.Short,true,25));
+  else if(action==="award")modal.addComponents(field("member_id","Member Discord ID",TextInputStyle.Short,true,25),field("points","Points to add or remove (-100 to 100)",TextInputStyle.Short,true,4),field("reason","Reason for this adjustment",TextInputStyle.Short,true,160));
   else modal.addComponents(field("title",action==="reward"?"Reward title":"Consequence title",TextInputStyle.Short,true,60),field("description","Description (voluntary, safe and non-financial)",TextInputStyle.Paragraph,true,250));
   await i.showModal(modal);return true;
 }
@@ -770,6 +772,16 @@ export async function handleModal(i){
         const points=approveChallenge(Number(idText),memberId,i.user.id,i.guildId);
         if(points===null)throw new Error("No pending entry was found for that member and active challenge.");
         message="Approved completion for "+member.user.username+"; awarded "+points+" points.";
+      }else if(action==="award"){
+        const memberId=i.fields.getTextInputValue("member_id").trim(),pointsText=i.fields.getTextInputValue("points").trim(),reason=i.fields.getTextInputValue("reason").trim();
+        if(!/^\\d{17,20}$/.test(memberId)||!(/^-?\\d+$/.test(pointsText))||!reason)throw new Error("Enter a valid member ID, whole-number points and a reason.");
+        const points=Number(pointsText);
+        if(!Number.isInteger(points)||points < -100||points > 100)throw new Error("Points must be between -100 and 100.");
+        const member=await i.guild.members.fetch(memberId).catch(()=>null);
+        if(!member)throw new Error("That member is not in this server.");
+        addPoints(member.id,member.user.username,points);
+        audit(i.guildId,i.user.id,"points_awarded",member.id+" "+points+" points: "+reason);
+        message="Updated "+member.user.username+"’s score by "+points+" points.";
       }else if(action==="reward"||action==="punishment"){
         const title=i.fields.getTextInputValue("title").trim(),description=i.fields.getTextInputValue("description").trim();
         if(!title||!description)throw new Error("A title and description are required.");
