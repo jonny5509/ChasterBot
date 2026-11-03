@@ -429,7 +429,17 @@ async function sendDashboardSessionInvite(i,rawMemberId){
   if(memberId===i.user.id)throw new Error('You cannot invite yourself.');
   const other=await i.guild.members.fetch(memberId).catch(()=>null);
   if(!other||other.user.bot)throw new Error('Choose another human member of this server.');
-  if(!getLinkedAccount(i.user.id)||!getLinkedAccount(other.id))throw new Error('Both participants must link their Chaster accounts first using /link-chaster.');
+  if(!getLinkedAccount(i.user.id)||!getLinkedAccount(other.id))throw new Error('Both participants must link their Chaster accounts first using the Account tab in /dashboard.');
+  const roleSettings=getRoleSettings().find(x=>x.guild_id===i.guildId);
+  if(!roleSettings?.wearer_role_id||!roleSettings?.keyholder_role_id)throw new Error('This server must configure both Wearer and Keyholder roles before matching invitations can be sent.');
+  const sender=await i.guild.members.fetch(i.user.id).catch(()=>null);
+  const senderWearer=Boolean(sender?.roles.cache.has(roleSettings.wearer_role_id));
+  const senderKeyholder=Boolean(sender?.roles.cache.has(roleSettings.keyholder_role_id));
+  const otherWearer=Boolean(other.roles.cache.has(roleSettings.wearer_role_id));
+  const otherKeyholder=Boolean(other.roles.cache.has(roleSettings.keyholder_role_id));
+  const complementary=(senderWearer&&otherKeyholder)||(senderKeyholder&&otherWearer);
+  if(!complementary)throw new Error('Matching invitations are only allowed between a Wearer and a Keyholder. You need the configured role, and the recipient must have the opposite role.');
+  if((senderWearer&&senderKeyholder)||(otherWearer&&otherKeyholder))throw new Error('For safety, matching requires each participant to have exactly one of the configured roles. Ask a server admin to resolve dual-role assignments first.');
   const parent=getSessionChannel(i.guildId);
   if(!parent)throw new Error('An admin must configure a session channel first. An admin can do this in the Admin dashboard.');
   const channel=await i.guild.channels.fetch(parent).catch(()=>null);
