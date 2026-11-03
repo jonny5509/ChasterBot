@@ -774,7 +774,7 @@ export async function handleModal(i){
         message="Approved completion for "+member.user.username+"; awarded "+points+" points.";
       }else if(action==="award"){
         const memberId=i.fields.getTextInputValue("member_id").trim(),pointsText=i.fields.getTextInputValue("points").trim(),reason=i.fields.getTextInputValue("reason").trim();
-        if(!/^\\d{17,20}$/.test(memberId)||!(/^-?\\d+$/.test(pointsText))||!reason)throw new Error("Enter a valid member ID, whole-number points and a reason.");
+        if(!/^\d{17,20}$/.test(memberId)||!(/^-?\d+$/.test(pointsText))||!reason)throw new Error("Enter a valid member ID, whole-number points and a reason.");
         const points=Number(pointsText);
         if(!Number.isInteger(points)||points < -100||points > 100)throw new Error("Points must be between -100 and 100.");
         const member=await i.guild.members.fetch(memberId).catch(()=>null);
