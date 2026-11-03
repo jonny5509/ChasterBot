@@ -501,7 +501,6 @@ if(i.customId.startsWith("dashadmin:")){
   const modal=new ModalBuilder().setCustomId("dashadmin-submit:"+action+":"+userId).setTitle(action==="settings"?"Configure server dashboard":"Retry failed delivery");
   const field=(id,label,required,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setRequired(required).setMaxLength(max));
   if(action==="audit"){
-    const field=(id,label,required,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setRequired(required).setMaxLength(max));
     modal.addComponents(field("action_filter","Action contains (optional)",false,80),field("actor_filter","Actor Discord ID (optional)",false,25),field("search_filter","Search action or details (optional)",false,100),field("days_filter","Time window: 1, 7, 30, 90 days or blank",false,3));
   }else   if(action==="settings"){
     modal.addComponents(field("wearer_role","Wearer role ID (or none)",false,25),field("keyholder_role","Keyholder role ID (or none)",false,25),field("session_channel","Session channel ID (or none)",false,25),field("notification_channel","Notification channel ID (or none)",false,25),field("retention","Notification retention: 7, 30 or 90",false,2));
@@ -642,7 +641,7 @@ export async function handleModal(i){
         const actorFilter=i.fields.getTextInputValue("actor_filter").trim();
         const searchFilter=i.fields.getTextInputValue("search_filter").trim();
         const daysText=i.fields.getTextInputValue("days_filter").trim();
-        if(actorFilter&&!/^\\d{17,20}$/.test(actorFilter))throw new Error("Actor must be a valid Discord user ID.");
+        if(actorFilter&&!/^\d{17,20}$/.test(actorFilter))throw new Error("Actor must be a valid Discord user ID.");
         if(daysText&&!["1","7","30","90"].includes(daysText))throw new Error("Time window must be 1, 7, 30 or 90 days.");
         const entries=recentAudit(i.guildId,200,{action:actionFilter,actorId:actorFilter,search:searchFilter,days:Number(daysText)||0});
         const lines=entries.map(x=>[x.id,x.created_at,x.actor_id,x.action,x.details].map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(","));
