@@ -16,3 +16,11 @@ export function shouldHaveWearerRole(value){
 export function shouldHaveKeyholderRole(value){
   return normalizeLockRows(value).length>0;
 }
+
+export function getLockStatusRoleState(value){
+  const locks=normalizeLockRows(value);
+  return {
+    locked:locks.some(lock=>String(lock?.status||"").toLowerCase()==="locked"),
+    active:locks.some(lock=>String(lock?.status||"").toLowerCase()==="active")
+  };
+}
