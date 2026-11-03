@@ -29,7 +29,7 @@ function lockStartTimestamp(lock){
   for(const key of ["lockedAt","startedAt","startDate","createdAt","created_at"]){
     const value=lock?.[key];
     if(value===undefined||value===null||value==="")continue;
-    const numeric=typeof value==="number"||/^\\d+(?:\\.\\d+)?$/.test(String(value))?Number(value):NaN;
+    const numeric=typeof value==="number"||/^\d+(?:\.\d+)?$/.test(String(value))?Number(value):NaN;
     const timestamp=Number.isFinite(numeric)?(numeric<1e12?numeric*1000:numeric):Date.parse(value);
     if(Number.isFinite(timestamp)&&timestamp>0)return timestamp;
   }
