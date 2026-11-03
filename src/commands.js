@@ -1,5 +1,5 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,ModalBuilder,TextInputBuilder,TextInputStyle,AttachmentBuilder} from "discord.js";
-import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,listChallenges,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
+import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,listChallenges,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setGuildRoleAutomation,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
@@ -127,7 +127,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const invites=data.invites.slice(0,5).map(inv=>inv.invitee_id===user.id?"Incoming invitation from <@"+inv.inviter_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>":"Invitation sent to <@"+inv.invitee_id+"> · expires <t:"+Math.floor(inv.expires_at/1000)+":R>");
   const title="**ChasterBot dashboard · "+guild.name+"**";
   const account="**Chaster account**\n"+(linked?"Linked"+(linkHealth?.status==="needs_reauth"?" · **Reconnect required**":" · healthy") :"Not linked · use Link Chaster below");
-  const roles="**Your server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id)+"\n\nUse Sync roles on the Account tab to refresh your Chaster-derived roles.";
+  const roles="**Your server roles**\nWearer: "+roleLabel(settings.wearer_role_id)+"\nKeyholder: "+roleLabel(settings.keyholder_role_id)+"\nAutomatic sync: "+(settings.role_sync_enabled===0?"Off":"On")+"\nRemove roles when inactive: "+(settings.role_remove_inactive===0?"Off (keep roles)":"On")+"\n\nServer admins can change automation rules in the Admin tab. Use Sync roles on the Account tab to refresh your Chaster-derived roles.";
   const activity=getMemberSessionActivity(guild.id,user.id,8);
   const eventLabel=(event,actor,other)=>({invited:"<@"+actor+"> invited <@"+other+">",accepted:"<@"+actor+"> accepted <@"+other+">’s invitation",declined:"<@"+actor+"> declined <@"+other+">’s invitation",cancelled:"<@"+actor+"> cancelled an invitation to <@"+other+">",created:"Private session created for <@"+actor+"> and <@"+other+">",closed:"<@"+actor+"> closed the private session with <@"+other+">"}[event]||"Session activity");
   const activityText=activity.length?"\n\n**Recent activity**\n"+activity.map(entry=>"• "+eventLabel(entry.event,entry.actor_id,entry.other_id)+" · <t:"+Math.floor(entry.created_at/1000)+":R>").join("\n"):"\n\nNo session activity yet.";
@@ -202,7 +202,7 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashadmin:settings:"+userId).setLabel("Configure settings").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary),\n      new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary)
     ));
   }
   if(tab==="community"){
@@ -500,7 +500,9 @@ if(i.customId.startsWith("dashadmin:")){
   if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to manage dashboard settings."});return true;}
   const modal=new ModalBuilder().setCustomId("dashadmin-submit:"+action+":"+userId).setTitle(action==="settings"?"Configure server dashboard":"Retry failed delivery");
   const field=(id,label,required,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setRequired(required).setMaxLength(max));
-  if(action==="audit"){
+  if(action==="automation"){
+    modal.addComponents(field("sync_enabled","Automatic role sync: yes or no",true,3),field("remove_inactive","Remove roles when inactive: yes or no",true,3));
+  }else   if(action==="audit"){
     modal.addComponents(field("action_filter","Action contains (optional)",false,80),field("actor_filter","Actor Discord ID (optional)",false,25),field("search_filter","Search action or details (optional)",false,100),field("days_filter","Time window: 1, 7, 30, 90 days or blank",false,3));
   }else   if(action==="settings"){
     modal.addComponents(field("wearer_role","Wearer role ID (or none)",false,25),field("keyholder_role","Keyholder role ID (or none)",false,25),field("session_channel","Session channel ID (or none)",false,25),field("notification_channel","Notification channel ID (or none)",false,25),field("retention","Notification retention: 7, 30 or 90",false,2));
@@ -636,7 +638,13 @@ export async function handleModal(i){
     if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to change server settings."});return true;}
     try{
       let message="";
-      if(action==="audit"){
+      if(action==="automation"){
+        const enabledText=i.fields.getTextInputValue("sync_enabled").trim().toLowerCase();
+        const removeText=i.fields.getTextInputValue("remove_inactive").trim().toLowerCase();
+        if(!["yes","no"].includes(enabledText)||!["yes","no"].includes(removeText))throw new Error("Enter yes or no for both role automation settings.");
+        setGuildRoleAutomation(i.guildId,{enabled:enabledText==="yes",removeInactive:removeText==="yes"},i.user.id);
+        message="Role automation saved. Automatic sync is "+(enabledText==="yes"?"on":"off")+"; inactive roles will "+(removeText==="yes"?"be removed":"be kept")+". Refresh the Admin tab to review.";
+      }else       if(action==="audit"){
         const actionFilter=i.fields.getTextInputValue("action_filter").trim();
         const actorFilter=i.fields.getTextInputValue("actor_filter").trim();
         const searchFilter=i.fields.getTextInputValue("search_filter").trim();
