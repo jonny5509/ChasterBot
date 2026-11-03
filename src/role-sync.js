@@ -35,11 +35,13 @@ export async function syncUserRoles(client,discordId){
     const a=await applyRole(guild,member,s.wearer_role_id,wearer,removeInactive);
     const b=await applyRole(guild,member,s.keyholder_role_id,keyholder,removeInactive);
     const c=await applyRole(guild,member,s.locked_role_id,locked,removeInactive);
-    const d=await applyRole(guild,member,s.active_role_id,active,removeInactive);\n    const minimumLocked=hasMinimumLockedDuration(ownRaw,s.minimum_locked_hours);\n    const e=await applyRole(guild,member,s.minimum_locked_role_id,minimumLocked,removeInactive);
+    const d=await applyRole(guild,member,s.active_role_id,active,removeInactive);
+    const minimumLocked=hasMinimumLockedDuration(ownRaw,s.minimum_locked_hours);\n    const e=await applyRole(guild,member,s.minimum_locked_role_id,minimumLocked,removeInactive);
     if(a==="added"||a==="removed")changed++;
     if(b==="added"||b==="removed")changed++;
     if(c==="added"||c==="removed")changed++;
-    if(d==="added"||d==="removed")changed++;\n    if(e==="added"||e==="removed")changed++;
+    if(d==="added"||d==="removed")changed++;
+    if(e==="added"||e==="removed")changed++;
     if([a,b,c,d,e].some(x=>x==="missing-role"||x==="role-hierarchy"))audit(guild.id,discordId,"role_sync_warning","Check role IDs and bot role hierarchy.");
     else audit(guild.id,discordId,"role_sync","wearer="+wearer+", keyholder="+keyholder+", locked="+locked+", active="+active+", minimum_locked="+minimumLocked+", minimum_locked_hours="+(s.minimum_locked_hours||0)+", remove_inactive="+removeInactive+", changed="+changed);
   }
