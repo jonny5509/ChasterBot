@@ -95,14 +95,15 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const linkHealth=getChasterLinkHealth(user.id);
   const settings=getGuildRoleSettings(guild.id);
   const roleLabel=(roleId)=>{if(!roleId)return "Not configured";const role=guild.roles.cache.get(roleId);return role?role.name+" ("+(member.roles.cache.has(roleId)?"assigned":"not assigned")+")":"Configured role missing";};
-  let personalLocks=[],keyholderLocks=[],lockLoadError=!linked?"Link your Chaster account using the button below to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account using the button below to load live locks.":null;
-  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account"||tab==="keyholder")){
+  let personalLocks=[],keyholderLocks=[],sharedLocks=[],lockLoadError=!linked?"Link your Chaster account using the button below to load live locks.":linkHealth?.status==="needs_reauth"?"Reconnect your Chaster account using the button below to load live locks.":null;
+  if(linked&&linkHealth?.status!=="needs_reauth"&&(tab==="overview"||tab==="account"||tab==="keyholder"||tab==="wearer")){
     try{
       const token=await accessToken(user.id);
       const [personalRaw,keyholderRaw]=await Promise.all([getMyLocks(token),getKeyholderLocks(token)]);
       const asList=(raw,...keys)=>Array.isArray(raw)?raw:keys.map(key=>raw?.[key]).find(Array.isArray)||[];
       personalLocks=asList(personalRaw,"locks","items","data").filter(lock=>!["ended","unlocked","expired","cancelled"].includes(String(lock.status||"").toLowerCase()));
       keyholderLocks=asList(keyholderRaw,"locks","items","data").filter(lock=>!["ended","unlocked","expired","cancelled"].includes(String(lock.status||"").toLowerCase()));
+      if(tab==="wearer"){const sharedRaw=await getSharedLocks(token);sharedLocks=asList(sharedRaw,"locks","items","sharedLocks","data");}
     }catch(error){
       lockLoadError=error.code==="CHASTER_REAUTH_REQUIRED"?"Chaster requires you to reconnect with /link-chaster.":error.code==="CHASTER_RATE_LIMITED"?"Chaster is rate limiting requests. Try Refresh shortly.":"Live lock data is temporarily unavailable. Try Refresh shortly.";
     }
@@ -143,7 +144,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   if(tab==="roles")body=roles;
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
   else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
-  else if(tab==="wearer")body="**Wearer tools**\nUse the controls below to view your own Chaster lock history and details, inspect public profiles and locks, and browse your shared locks. Private account data is loaded only from your linked Chaster account.\n\n"+(lockLoadError||"Your wearer lock list is available on the Overview and Account tabs.")+"\n\nAll lookups are private to you.";
+  else if(tab==="wearer")body="**Wearer tools**\nYour shared locks\n"+(sharedLocks.length?sharedLocks.slice(0,8).map(lock=> "• **"+String(lock.title||lock.name||"Shared lock").slice(0,55)+"** · ID: `"+String(lock._id||lock.id||"unknown")+"`").join("\n"):"No shared locks returned.")+"\n\nUse the controls below for lock history, details/seal status, favourites, archive, public profiles and Chaster statistics/discovery. All lookups are private to you.";
   else if(tab==="keyholder")body=lockLoadError?"**Keyholder tools**\n"+lockLoadError:keyholderLocks.length?"**Keyholder tools**\n"+lockSection("**Locks you keyhold**",keyholderLocks)+"\n\nUse the buttons below to view or delete private notes, or propose a time change. Every operation rechecks your configured Keyholder role and Chaster lock ownership.":"**Keyholder tools**\nNo keyheld locks were found, or your Chaster account is not connected. You need the configured Keyholder role and a trusted Chaster keyholder lock to use these actions.";
   else if(tab==="community"){
     const challenges=listChallenges(guild.id),rewards=listRewardItems(guild.id,"reward"),punishments=listRewardItems(guild.id,"punishment");
@@ -632,6 +633,7 @@ if(i.customId.startsWith("dashcalendar:")){
     fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("start").setLabel("Start date/time (ISO 8601; optional for edit)").setStyle(TextInputStyle.Short).setRequired(action==="add").setMaxLength(40).setPlaceholder("2026-11-05T18:00:00Z")));
     fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("end").setLabel("End date/time (optional ISO 8601)").setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(40)));
     fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("description").setLabel("Description (optional)").setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)));
+    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("all_day").setLabel("All day? yes or no").setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(3).setPlaceholder("no")));
   }else fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("event_id").setLabel("Calendar event ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
   modal.addComponents(...fields);await i.showModal(modal);return true;
 }
@@ -927,21 +929,23 @@ export async function handleModal(i){
       const start=new Date(i.fields.getTextInputValue("start").trim());
       const endText=i.fields.getTextInputValue("end").trim();
       const end=endText?new Date(endText):null;
-      const description=i.fields.getTextInputValue("description").trim();
+      const description=i.fields.getTextInputValue("description").trim(),allDayText=i.fields.getTextInputValue("all_day").trim().toLowerCase();
+      if(allDayText&&!["yes","no"].includes(allDayText)){await i.reply({ephemeral:true,content:"All day must be yes or no."});return true;}
       if(!Number.isFinite(start.getTime())||(endText&&(!Number.isFinite(end.getTime())||end<=start))){await i.reply({ephemeral:true,content:"Use valid ISO 8601 dates; the optional end must be later than the start."});return true;}
       await i.deferReply({ephemeral:true});
-      try{const data={type:"lock_period",startDate:start.toISOString(),...(end?{endDate:end.toISOString()}:{}),...(description?{description}:{})};const result=await createCalendarEvent(data,token);await i.editReply("Chaster accepted the calendar event creation request.\n"+JSON.stringify(result).slice(0,1000));}
+      try{const data={type:"lock_period",startDate:start.toISOString(),...(end?{endDate:end.toISOString()}:{}),...(description?{description}:{}),...(allDayText?{isAllDay:allDayText==="yes"}:{})};const result=await createCalendarEvent(data,token);await i.editReply("Chaster accepted the calendar event creation request.\n"+JSON.stringify(result).slice(0,1000));}
       catch(error){await i.editReply("Could not create the calendar event: "+error.message);}
       return true;
     }
     if(action==="edit"){
-      const eventId=i.fields.getTextInputValue("event_id").trim(),startText=i.fields.getTextInputValue("start").trim(),endText=i.fields.getTextInputValue("end").trim(),description=i.fields.getTextInputValue("description").trim();
-      if(!eventId||eventId.length>100||(!startText&&!endText&&!description)){await i.reply({ephemeral:true,content:"Enter an event ID and at least one field to update."});return true;}
+      const eventId=i.fields.getTextInputValue("event_id").trim(),startText=i.fields.getTextInputValue("start").trim(),endText=i.fields.getTextInputValue("end").trim(),description=i.fields.getTextInputValue("description").trim(),allDayText=i.fields.getTextInputValue("all_day").trim().toLowerCase();
+      if(allDayText&&!["yes","no"].includes(allDayText)){await i.reply({ephemeral:true,content:"All day must be yes or no."});return true;}
+      if(!eventId||eventId.length>100||(!startText&&!endText&&!description&&!allDayText)){await i.reply({ephemeral:true,content:"Enter an event ID and at least one field to update."});return true;}
       const data={};
       if(startText){const d=new Date(startText);if(!Number.isFinite(d.getTime())){await i.reply({ephemeral:true,content:"Start date must be valid ISO 8601."});return true;}data.startDate=d.toISOString();}
       if(endText){const d=new Date(endText);if(!Number.isFinite(d.getTime())){await i.reply({ephemeral:true,content:"End date must be valid ISO 8601."});return true;}data.endDate=d.toISOString();}
       if(data.startDate&&data.endDate&&new Date(data.endDate)<=new Date(data.startDate)){await i.reply({ephemeral:true,content:"End date must be later than start date."});return true;}
-      if(description)data.description=description;
+      if(description)data.description=description;if(allDayText)data.isAllDay=allDayText==="yes";
       await i.deferReply({ephemeral:true});
       try{const own=await getCalendarEvents(token);if(!isOwnedResourceListed(own,eventId,["items","events","data"],"_id","id","eventId","event_id"))throw new Error("That event is not in your own calendar. No update request was made.");const result=await updateCalendarEvent(eventId,data,token);await i.editReply("Chaster accepted the calendar event update.\n"+JSON.stringify(result).slice(0,900));}
       catch(error){await i.editReply("Could not update the calendar event: "+error.message);}
