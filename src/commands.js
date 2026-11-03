@@ -710,7 +710,7 @@ export async function handleModal(i){
         else {const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No details request was made.");raw=await getLockDetails(id,token);}
       }else if(action==="profile")raw=await getUserProfileOverview(id,token);
       else if(action==="public-locks")raw=await getPublicLocks(id,token);
-      }else throw new Error("Unknown Wearer action.");
+      else throw new Error("Unknown Wearer action.");
       await i.editReply("**Chaster "+action+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
     }catch(error){await i.editReply("Could not complete this Chaster lookup: "+(error.message||"request failed"));}
     return true;
