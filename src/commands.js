@@ -204,7 +204,8 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:status-roles:"+userId).setLabel("Lock status roles").setStyle(ButtonStyle.Secondary),\n      new ButtonBuilder().setCustomId("dashadmin:minimum-lock:"+userId).setLabel("Minimum lock duration").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashadmin:status-roles:"+userId).setLabel("Lock status roles").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashadmin:minimum-lock:"+userId).setLabel("Minimum lock duration").setStyle(ButtonStyle.Secondary)
     ));
   }
   if(tab==="community"){
