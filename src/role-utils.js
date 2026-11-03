@@ -26,7 +26,7 @@ export function getLockStatusRoleState(value){
 }
 
 function lockStartTimestamp(lock){
-  for(const key of ["lockedAt","startedAt","startDate","createdAt","created_at"]){
+  for(const key of ["lockedAt","locked_at","startedAt","started_at","startDate","start_date"]){
     const value=lock?.[key];
     if(value===undefined||value===null||value==="")continue;
     const numeric=typeof value==="number"||/^\d+(?:\.\d+)?$/.test(String(value))?Number(value):NaN;
