@@ -143,6 +143,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   if(tab==="roles")body=roles;
   else if(tab==="sessions")body=sessionText+"\n\nCommands: /session-invite";
   else if(tab==="account")body=account+"\n\n"+liveLocks+"\n\nUse the account controls below to link, reconnect, check your connection, unlink safely or sync server roles.";
+  else if(tab==="wearer")body="**Wearer tools**\nUse the controls below to view your own Chaster lock history and details, inspect public profiles and locks, and browse your shared locks. Private account data is loaded only from your linked Chaster account.\n\n"+(lockLoadError||"Your wearer lock list is available on the Overview and Account tabs.")+"\n\nAll lookups are private to you.";
   else if(tab==="keyholder")body=lockLoadError?"**Keyholder tools**\n"+lockLoadError:keyholderLocks.length?"**Keyholder tools**\n"+lockSection("**Locks you keyhold**",keyholderLocks)+"\n\nUse the buttons below to view or delete private notes, or propose a time change. Every operation rechecks your configured Keyholder role and Chaster lock ownership.":"**Keyholder tools**\nNo keyheld locks were found, or your Chaster account is not connected. You need the configured Keyholder role and a trusted Chaster keyholder lock to use these actions.";
   else if(tab==="community"){
     const challenges=listChallenges(guild.id),rewards=listRewardItems(guild.id,"reward"),punishments=listRewardItems(guild.id,"punishment");
@@ -175,7 +176,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
 function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
-  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["community","Community"],["conversations","Messages"],["commands","Commands"]];
+  const tabs=[["overview","Overview"],["roles","Roles"],["sessions","Sessions"],["account","Account"],["wearer","Wearer"],["keyholder","Keyholder"],["notifications","Notifications"],["calendar","Calendar"],["community","Community"],["conversations","Messages"],["commands","Commands"]];
   if(isAdmin)tabs.push(["admin","Admin"]);
   const rows=[];
   for(let i=0;i<tabs.length;i+=5)rows.push(new ActionRowBuilder().addComponents(...tabs.slice(i,i+5).map(([key,label])=>new ButtonBuilder().setCustomId("dashboard:"+key+":"+userId).setLabel(label).setStyle(tab===key?ButtonStyle.Primary:ButtonStyle.Secondary))));
@@ -190,11 +191,25 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     actions.push(new ButtonBuilder().setCustomId("dashaccount:sync:"+userId).setLabel("Sync roles").setStyle(ButtonStyle.Primary));
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
+  if(tab==="wearer"){
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashwearer:history:"+userId).setLabel("Lock history").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dashwearer:details:"+userId).setLabel("Lock details").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:profile:"+userId).setLabel("Public profile").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:public-locks:"+userId).setLabel("Public locks").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:shared-details:"+userId).setLabel("Shared lock details").setStyle(ButtonStyle.Secondary)
+    ));
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashwearer:my-stats:"+userId).setLabel("My Chaster stats").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("dashwearer:catalog:"+userId).setLabel("Explore Chaster").setStyle(ButtonStyle.Secondary)
+    ));
+  }
   if(tab==="keyholder"){
     const actions=[
       new ButtonBuilder().setCustomId("dashkeyholder:notes:"+userId).setLabel("View lock notes").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashkeyholder:delete-notes:"+userId).setLabel("Delete lock notes").setStyle(ButtonStyle.Danger),
-      new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dashkeyholder:applications:"+userId).setLabel("View applications").setStyle(ButtonStyle.Secondary)
     ];
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
@@ -498,6 +513,43 @@ const admin=Boolean(i.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 await i.update({content:"Invitation cancelled.\n\n"+await buildMemberDashboard(i.guild,i.user,admin,"sessions"),components:buildDashboardComponents(i.guild,i.user.id,admin,"sessions")});
 return true;
 }
+if(i.customId.startsWith("dashwearer:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+  const settings=getRoleSettings().find(x=>x.guild_id===i.guildId);
+  const member=await i.guild.members.fetch(i.user.id).catch(()=>null);
+  if(!settings?.wearer_role_id||!member?.roles.cache.has(settings.wearer_role_id)){await i.reply({ephemeral:true,content:"Your configured Wearer role is not present. Link Chaster and refresh your roles from the Account tab; an admin may need to configure the Wearer role."});return true;}
+  if(action==="my-stats"||action==="catalog"){
+    await i.deferReply({ephemeral:true});
+    try{
+      const token=await accessToken(i.user.id);let raw;
+      if(action==="my-stats"){
+        const profile=await getCurrentProfile(token),id=String(profile.id||profile._id||"");
+        const [stats,achievements,badges,calendar]=await Promise.all([getUserProfileStatistics(profile.username||id,token),id?getUserAchievements(id,token):Promise.resolve(null),getUserBadgeCount(token),getCalendarStatistics(token)]);
+        raw={profile,statistics:stats,achievements,badges,calendar};
+      }else{
+        const [extensions,categories,tags,achievementCategories,communityCategories]=await Promise.all([getExtensions(token),getExploreCategories(token),getSharedLockTags(token),getAchievementCategories(token),getCommunityEventCategories(token)]);
+        raw={extensions,categories,sharedLockTags:tags,achievementCategories,communityCategories};
+      }
+      await i.editReply("**"+(action==="my-stats"?"Your Chaster profile and statistics":"Chaster discovery catalogue")+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
+    }catch(error){await i.editReply("Could not load Chaster data: "+(error.message||"request failed"));}
+    return true;
+  }
+  const labels={history:"Lock history",details:"Lock details",profile:"Public Chaster profile", "public-locks":"Public Chaster locks","shared-details":"Shared lock details"};
+  const fields={history:["lock_id","Chaster lock ID"],details:["lock_id","Chaster lock ID"],profile:["username","Chaster username"],"public-locks":["user_id","Chaster user ID"],"shared-details":["shared_lock_id","Shared lock ID"]};
+  const spec=fields[action];if(!spec){await i.reply({ephemeral:true,content:"Unknown Wearer action."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashwearer-submit:"+action+":"+userId).setTitle(labels[action]);
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(spec[0]).setLabel(spec[1]).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+  await i.showModal(modal);return true;
+}
+if(i.customId.startsWith("dashkeyholder:")&&i.customId.includes(":applications:")){
+  const [,action,userId]=i.customId.split(":");
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashkeyholder-submit:applications:"+userId).setTitle("Keyholder applications");
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("lock_id").setLabel("Chaster lock ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+  await i.showModal(modal);return true;
+}
 if(i.customId.startsWith("dashadmin:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -641,6 +693,36 @@ return true;
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
 
 export async function handleModal(i){
+  if(i.customId.startsWith("dashwearer-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    if(!i.guild){await i.reply({ephemeral:true,content:"Open the dashboard from a server."});return true;}
+    const settings=getRoleSettings().find(x=>x.guild_id===i.guildId),member=await i.guild.members.fetch(i.user.id).catch(()=>null);
+    if(!settings?.wearer_role_id||!member?.roles.cache.has(settings.wearer_role_id)){await i.reply({ephemeral:true,content:"Your configured Wearer role is no longer present. No Chaster request was made."});return true;}
+    const id=i.fields.getTextInputValue(({history:"lock_id",details:"lock_id",profile:"username","public-locks":"user_id","shared-details":"shared_lock_id"})[action]).trim();
+    if(!id||id.length>100){await i.reply({ephemeral:true,content:"Enter a valid Chaster ID or username."});return true;}
+    await i.deferReply({ephemeral:true});
+    try{
+      const token=await accessToken(i.user.id);let raw;
+      if(action==="history"){
+        const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);
+        if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No history request was made.");
+        raw=await getLockHistory(id,token);
+      }else if(action==="details"){
+        const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);
+        if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No details request was made.");
+        raw=await getLockDetails(id,token);
+      }else if(action==="profile")raw=await getUserProfileOverview(id,token);
+      else if(action==="public-locks")raw=await getPublicLocks(id,token);
+      else if(action==="shared-details"){
+        const own=await getSharedLocks(token);
+        if(!isOwnedResourceListed(own,id,["items","locks","sharedLocks","data"],"_id","id"))throw new Error("That shared lock is not in your own shared-lock list. No details request was made.");
+        raw=await getSharedLockDetails(id,token);
+      }else throw new Error("Unknown Wearer action.");
+      await i.editReply("**Chaster "+action+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
+    }catch(error){await i.editReply("Could not complete this Chaster lookup: "+(error.message||"request failed"));}
+    return true;
+  }
   if(i.customId.startsWith("dashadmin-submit:")){
     const [,action,userId]=i.customId.split(":");
     if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -854,6 +936,11 @@ export async function handleModal(i){
       const locks=Array.isArray(raw)?raw:(raw?.locks||[]);
       const lock=locks.find(x=>String(x._id||x.id)===lockId);
       if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("That lock is not in your trusted Chaster keyholder lock list. No action was taken.");
+      if(action==="applications"){
+        const applications=await getKeyholderApplications(lockId,token);
+        await i.editReply("**Keyholder applications · "+String(lock.title||lockId)+"**\n```json\n"+JSON.stringify(applications,null,2).replace(/@/g,"＠").slice(0,1650)+"\n```");
+        return true;
+      }
       if(action==="notes"){
         const notes=await getKeyholderNotes(lockId,token);
         const output=typeof notes==="string"?notes:JSON.stringify(notes,null,2);
