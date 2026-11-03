@@ -1,4 +1,4 @@
-import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,ModalBuilder,TextInputBuilder,TextInputStyle} from "discord.js";
+import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,ModalBuilder,TextInputBuilder,TextInputStyle,AttachmentBuilder} from "discord.js";
 import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,listChallenges,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
@@ -201,7 +201,8 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
   if(tab==="admin"&&isAdmin){
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashadmin:settings:"+userId).setLabel("Configure settings").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary)
     ));
   }
   if(tab==="community"){
@@ -499,7 +500,10 @@ if(i.customId.startsWith("dashadmin:")){
   if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to manage dashboard settings."});return true;}
   const modal=new ModalBuilder().setCustomId("dashadmin-submit:"+action+":"+userId).setTitle(action==="settings"?"Configure server dashboard":"Retry failed delivery");
   const field=(id,label,required,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setRequired(required).setMaxLength(max));
-  if(action==="settings"){
+  if(action==="audit"){
+    const field=(id,label,required,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setRequired(required).setMaxLength(max));
+    modal.addComponents(field("action_filter","Action contains (optional)",false,80),field("actor_filter","Actor Discord ID (optional)",false,25),field("search_filter","Search action or details (optional)",false,100),field("days_filter","Time window: 1, 7, 30, 90 days or blank",false,3));
+  }else   if(action==="settings"){
     modal.addComponents(field("wearer_role","Wearer role ID (or none)",false,25),field("keyholder_role","Keyholder role ID (or none)",false,25),field("session_channel","Session channel ID (or none)",false,25),field("notification_channel","Notification channel ID (or none)",false,25),field("retention","Notification retention: 7, 30 or 90",false,2));
   }else if(action==="retry")modal.addComponents(field("queue_id","Failed notification queue ID",true,12));
   else{await i.reply({ephemeral:true,content:"Unknown admin action."});return true;}
@@ -633,7 +637,21 @@ export async function handleModal(i){
     if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to change server settings."});return true;}
     try{
       let message="";
-      if(action==="settings"){
+      if(action==="audit"){
+        const actionFilter=i.fields.getTextInputValue("action_filter").trim();
+        const actorFilter=i.fields.getTextInputValue("actor_filter").trim();
+        const searchFilter=i.fields.getTextInputValue("search_filter").trim();
+        const daysText=i.fields.getTextInputValue("days_filter").trim();
+        if(actorFilter&&!/^\\d{17,20}$/.test(actorFilter))throw new Error("Actor must be a valid Discord user ID.");
+        if(daysText&&!["1","7","30","90"].includes(daysText))throw new Error("Time window must be 1, 7, 30 or 90 days.");
+        const entries=recentAudit(i.guildId,200,{action:actionFilter,actorId:actorFilter,search:searchFilter,days:Number(daysText)||0});
+        const lines=entries.map(x=>[x.id,x.created_at,x.actor_id,x.action,x.details].map(v=>'"'+String(v??"").replace(/"/g,'""')+'"').join(","));
+        const csv=["id,created_at,actor_id,action,details",...lines].join("\\n");
+        const summary=entries.slice(0,12).map(x=>"#"+x.id+" · "+x.created_at+" · <@"+x.actor_id+"> · "+x.action+" · "+String(x.details).slice(0,90)).join("\\n");
+        const attachment=new AttachmentBuilder(Buffer.from(csv,"utf8"),{name:"server-audit-"+i.guildId+".csv"});
+        await i.reply({ephemeral:true,content:"**Audit results: "+entries.length+" entries** (up to 200 newest matches)\\n"+(summary||"No matching audit events.")+"\\n\\nCSV export attached.",files:[attachment]});
+        return true;
+      }else       if(action==="settings"){
         const value=id=>i.fields.getTextInputValue(id).trim();
         const resolveRole=async id=>{
           const raw=value(id);if(!raw)return undefined;if(raw.toLowerCase()==="none")return null;
