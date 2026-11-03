@@ -199,6 +199,13 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashwearer:public-locks:"+userId).setLabel("Public locks").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashwearer:my-stats:"+userId).setLabel("My stats & explore").setStyle(ButtonStyle.Success)
     ));
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashwearer:fav-check:"+userId).setLabel("Check favourite").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:fav-add:"+userId).setLabel("Add favourite").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("dashwearer:fav-remove:"+userId).setLabel("Remove favourite").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("dashwearer:archive:"+userId).setLabel("Archive shared lock").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("dashwearer:public-stats:"+userId).setLabel("Public user stats").setStyle(ButtonStyle.Secondary)
+    ));
   }
   if(tab==="keyholder"){
     const actions=[
@@ -231,12 +238,15 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     const enabled=getNotificationPreference(guild.id,userId);
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashnotify:toggle:"+userId).setLabel(enabled?"Pause server updates":"Resume server updates").setStyle(enabled?ButtonStyle.Secondary:ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("dashnotify:read-all:"+userId).setLabel("Mark Chaster notifications read").setStyle(ButtonStyle.Primary)
+      new ButtonBuilder().setCustomId("dashnotify:read-all:"+userId).setLabel("Mark all read").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dashnotify:read-one:"+userId).setLabel("Mark one read").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashnotify:health:"+userId).setLabel("Chaster notification health").setStyle(ButtonStyle.Secondary)
     ));
   }
   if(tab==="calendar"){
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashcalendar:add:"+userId).setLabel("Create calendar event").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("dashcalendar:edit:"+userId).setLabel("Edit calendar event").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("dashcalendar:delete:"+userId).setLabel("Delete calendar event").setStyle(ButtonStyle.Danger)
     ));
   }
@@ -532,8 +542,8 @@ if(i.customId.startsWith("dashwearer:")){
     }catch(error){await i.editReply("Could not load Chaster data: "+(error.message||"request failed"));}
     return true;
   }
-  const labels={history:"Lock history",details:"Lock details, seal or shared lock",profile:"Public Chaster profile", "public-locks":"Public Chaster locks"};
-  const fields={history:["lock_id","Your Chaster lock ID"],details:["lock_id","Lock ID, or shared:ID / seal:ID"],profile:["username","Chaster username"],"public-locks":["user_id","Chaster user ID"]};
+  const labels={history:"Lock history",details:"Lock details, seal or shared lock",profile:"Public Chaster profile", "public-locks":"Public Chaster locks","fav-check":"Check shared-lock favourite","fav-add":"Add shared-lock favourite","fav-remove":"Remove shared-lock favourite","archive":"Archive shared lock","public-stats":"Public user statistics"};
+  const fields={history:["lock_id","Your Chaster lock ID"],details:["lock_id","Lock ID, or shared:ID / seal:ID"],profile:["username","Chaster username"],"public-locks":["user_id","Chaster user ID"],"fav-check":["shared_lock_id","Shared lock ID"],"fav-add":["shared_lock_id","Shared lock ID"],"fav-remove":["shared_lock_id","Shared lock ID"],archive:["shared_lock_id","Shared lock ID"],"public-stats":["username","Chaster username"]};
   const spec=fields[action];if(!spec){await i.reply({ephemeral:true,content:"Unknown Wearer action."});return true;}
   const modal=new ModalBuilder().setCustomId("dashwearer-submit:"+action+":"+userId).setTitle(labels[action]);
   modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(spec[0]).setLabel(spec[1]).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
@@ -600,20 +610,26 @@ if(i.customId.startsWith("dashnotify:")){
     await i.update({content,components:buildDashboardComponents(i.guild,i.user.id,admin,"notifications")});
     return true;
   }
-  if(action==="read-all"){
+  if(action==="read-all"||action==="health"){
     await i.deferReply({ephemeral:true});
-    try{const token=await accessToken(i.user.id);await markAllNotificationsRead(token);await i.editReply("Chaster accepted the mark-all-as-read request.");}
-    catch(error){await i.editReply("Could not mark Chaster notifications as read: "+error.message);}
+    try{const token=await accessToken(i.user.id);const raw=action==="read-all"?await markAllNotificationsRead(token):await getNotificationChannelHealth(token);await i.editReply(action==="read-all"?"Chaster accepted the mark-all-as-read request.":"**Chaster notification health**\n"+JSON.stringify(raw,null,2).slice(0,1600));}
+    catch(error){await i.editReply("Could not complete the notification action: "+error.message);}
     return true;
+  }
+  if(action==="read-one"){
+    const modal=new ModalBuilder().setCustomId("dashnotify-submit:read-one:"+userId).setTitle("Mark Chaster notification read");
+    modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("notification_id").setLabel("Chaster notification ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+    await i.showModal(modal);return true;
   }
 }
 if(i.customId.startsWith("dashcalendar:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
-  const modal=new ModalBuilder().setCustomId("dashcalendar-submit:"+action+":"+userId).setTitle(action==="add"?"Create calendar event":"Delete calendar event");
+  const modal=new ModalBuilder().setCustomId("dashcalendar-submit:"+action+":"+userId).setTitle(action==="add"?"Create calendar event":action==="edit"?"Edit calendar event":"Delete calendar event");
   const fields=[];
-  if(action==="add"){
-    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("start").setLabel("Start date/time (ISO 8601)").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(40).setPlaceholder("2026-11-05T18:00:00Z")));
+  if(action==="add"||action==="edit"){
+    if(action==="edit")fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("event_id").setLabel("Calendar event ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
+    fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("start").setLabel("Start date/time (ISO 8601; optional for edit)").setStyle(TextInputStyle.Short).setRequired(action==="add").setMaxLength(40).setPlaceholder("2026-11-05T18:00:00Z")));
     fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("end").setLabel("End date/time (optional ISO 8601)").setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(40)));
     fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("description").setLabel("Description (optional)").setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(500)));
   }else fields.push(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("event_id").setLabel("Calendar event ID").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
@@ -710,10 +726,30 @@ export async function handleModal(i){
         else {const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No details request was made.");raw=await getLockDetails(id,token);}
       }else if(action==="profile")raw=await getUserProfileOverview(id,token);
       else if(action==="public-locks")raw=await getPublicLocks(id,token);
-      else throw new Error("Unknown Wearer action.");
+      else if(action==="public-stats")raw=await getUserProfileStatistics(id,token);
+      else if(["fav-check","fav-add","fav-remove","archive"].includes(action)){
+        const own=await getSharedLocks(token);
+        if(!isOwnedResourceListed(own,id,["items","locks","sharedLocks","data"],"_id","id"))throw new Error("That shared lock is not in your own shared-lock list. No action was taken.");
+        if(action==="fav-check")raw=await getSharedLockFavorite(id,token);
+        else if(action==="fav-add"){raw=await addSharedLockFavorite(id,token);}
+        else if(action==="fav-remove"){raw=await removeSharedLockFavorite(id,token);}
+        else {const nonce=randomUUID();pending.set(nonce,{user:i.user.id,sharedLockId:id,created:Date.now(),kind:"shared-lock-archive"});const row=new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("sa:"+nonce).setLabel("Confirm archive").setStyle(ButtonStyle.Danger),new ButtonBuilder().setCustomId("sx:"+nonce).setLabel("Cancel").setStyle(ButtonStyle.Secondary));await i.editReply({content:"Archive your shared lock "+id+"? This may hide it from active shared-lock listings. No change occurs unless you confirm.",components:[row]});return true;}
+      }else throw new Error("Unknown Wearer action.");
       await i.editReply("**Chaster "+action+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
     }catch(error){await i.editReply("Could not complete this Chaster lookup: "+(error.message||"request failed"));}
     return true;
+  }
+  if(i.customId.startsWith("dashnotify-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    if(action==="read-one"){
+      const id=i.fields.getTextInputValue("notification_id").trim();
+      if(!id||id.length>100){await i.reply({ephemeral:true,content:"Enter a valid notification ID."});return true;}
+      await i.deferReply({ephemeral:true});
+      try{const token=await accessToken(i.user.id);await markNotificationRead(id,token);await i.editReply("Chaster accepted the mark-as-read request.");}
+      catch(error){await i.editReply("Could not mark the notification as read: "+error.message);}
+      return true;
+    }
   }
   if(i.customId.startsWith("dashadmin-submit:")){
     const [,action,userId]=i.customId.split(":");
@@ -896,6 +932,19 @@ export async function handleModal(i){
       await i.deferReply({ephemeral:true});
       try{const data={type:"lock_period",startDate:start.toISOString(),...(end?{endDate:end.toISOString()}:{}),...(description?{description}:{})};const result=await createCalendarEvent(data,token);await i.editReply("Chaster accepted the calendar event creation request.\n"+JSON.stringify(result).slice(0,1000));}
       catch(error){await i.editReply("Could not create the calendar event: "+error.message);}
+      return true;
+    }
+    if(action==="edit"){
+      const eventId=i.fields.getTextInputValue("event_id").trim(),startText=i.fields.getTextInputValue("start").trim(),endText=i.fields.getTextInputValue("end").trim(),description=i.fields.getTextInputValue("description").trim();
+      if(!eventId||eventId.length>100||(!startText&&!endText&&!description)){await i.reply({ephemeral:true,content:"Enter an event ID and at least one field to update."});return true;}
+      const data={};
+      if(startText){const d=new Date(startText);if(!Number.isFinite(d.getTime())){await i.reply({ephemeral:true,content:"Start date must be valid ISO 8601."});return true;}data.startDate=d.toISOString();}
+      if(endText){const d=new Date(endText);if(!Number.isFinite(d.getTime())){await i.reply({ephemeral:true,content:"End date must be valid ISO 8601."});return true;}data.endDate=d.toISOString();}
+      if(data.startDate&&data.endDate&&new Date(data.endDate)<=new Date(data.startDate)){await i.reply({ephemeral:true,content:"End date must be later than start date."});return true;}
+      if(description)data.description=description;
+      await i.deferReply({ephemeral:true});
+      try{const own=await getCalendarEvents(token);if(!isOwnedResourceListed(own,eventId,["items","events","data"],"_id","id","eventId","event_id"))throw new Error("That event is not in your own calendar. No update request was made.");const result=await updateCalendarEvent(eventId,data,token);await i.editReply("Chaster accepted the calendar event update.\n"+JSON.stringify(result).slice(0,900));}
+      catch(error){await i.editReply("Could not update the calendar event: "+error.message);}
       return true;
     }
     if(action==="delete"){
