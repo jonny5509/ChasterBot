@@ -652,18 +652,17 @@ export async function handleModal(i){
         };
         const current=getGuildRoleSettings(i.guildId);
         const wearer=await resolveRole("wearer_role"),keyholder=await resolveRole("keyholder_role");
-        if(wearer!==undefined||keyholder!==undefined)setGuildRoles(i.guildId,wearer===undefined?current.wearer_role_id:wearer,keyholder===undefined?current.keyholder_role_id:keyholder,i.user.id);
         const me=await i.guild.members.fetchMe();
         const session=await resolveChannel("session_channel");
-        if(session!==undefined){
-          if(session&&!session.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.CreatePrivateThreads,PermissionFlagsBits.SendMessagesInThreads]))throw new Error("The bot needs View Channel, Send Messages, Create Private Threads and Send Messages in Threads in the session channel.");
-          setSessionChannel(i.guildId,session?.id??null,i.user.id);
-        }
+        if(session&&!session.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.CreatePrivateThreads,PermissionFlagsBits.SendMessagesInThreads]))throw new Error("The bot needs View Channel, Send Messages, Create Private Threads and Send Messages in Threads in the session channel.");
         const notification=await resolveChannel("notification_channel");
         if(notification&&!notification.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages]))throw new Error("The bot needs View Channel and Send Messages in the notification channel.");
-        if(notification!==undefined)setNotificationChannel(i.guildId,notification?.id??null,i.user.id);
         const retention=value("retention");
-        if(retention){if(!["7","30","90"].includes(retention))throw new Error("Notification retention must be 7, 30 or 90 days.");setNotificationRetentionDays(i.guildId,Number(retention),i.user.id);}
+        if(retention&&!["7","30","90"].includes(retention))throw new Error("Notification retention must be 7, 30 or 90 days.");
+        if(wearer!==undefined||keyholder!==undefined)setGuildRoles(i.guildId,wearer===undefined?current.wearer_role_id:wearer,keyholder===undefined?current.keyholder_role_id:keyholder,i.user.id);
+        if(session!==undefined)setSessionChannel(i.guildId,session?.id??null,i.user.id);
+        if(notification!==undefined)setNotificationChannel(i.guildId,notification?.id??null,i.user.id);
+        if(retention)setNotificationRetentionDays(i.guildId,Number(retention),i.user.id);
         message="Server settings saved. Refresh the Admin tab to see the updated configuration.";
       }else if(action==="retry"){
         const idText=i.fields.getTextInputValue("queue_id").trim();
