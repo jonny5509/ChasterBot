@@ -1,5 +1,5 @@
 import {SlashCommandBuilder,PermissionFlagsBits,ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,ModalBuilder,TextInputBuilder,TextInputStyle,AttachmentBuilder} from "discord.js";
-import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,listChallenges,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setGuildRoleAutomation,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
+import {ensureProfile,leaderboard,createChallenge,joinChallenge,approveChallenge,listChallenges,setNotificationChannel,setNotificationOptIn,getNotificationPreference,getNotificationChannel,getDiscordNotificationQueueStats,getFailedDiscordNotifications,retryFailedDiscordNotification,recentAudit,addPoints,addRewardItem,listRewardItems,audit,getLinkedAccount,deleteLinkedAccount,getChasterLinkHealth,setGuildRoles,setGuildRoleAutomation,setGuildStatusRoles,setSessionChannel,getSessionChannel,createSessionInvite,consumeSessionInvite,getRoleSettings,getNotificationChannelPause,getDiscordNotificationHistory,getDiscordNotificationDeliveryReport,getNotificationRetentionDays,setNotificationRetentionDays,getGuildRoleSettings,getMemberSessionDashboard,recordPrivateSession,deleteSessionInvite,deletePrivateSession,recordSessionActivity,getMemberSessionActivity} from "./db.js";
 import {createAuthorizationUrl,getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks,updateLockTime,getCurrentProfile,getSharedLocks,getConversations,getCalendarEvents,getNotificationCounts,getLockDetails,getLockSeal,getKeyholderNotes,deleteKeyholderNotes,getChasterSettings,getPermissionDefinitions,getUserProfileOverview,getUserProfileStatistics,getUserAchievements,getUserBadgeCount,getLockHistory,getKeyholderApplications,getConversation,getConversationMessages,getSharedLockFavorite,addSharedLockFavorite,removeSharedLockFavorite,getNotificationChannelHealth,markNotificationRead,markAllNotificationsRead,getSharedLockDetails,getSharedLockTags,getExtensions,getExploreCategories,getCalendarStatistics,getBlockedUsers,getAchievementCategories,getIgnoredUsers,getLockStatsResetConfig,getCommunityEventCategories,getPublicLocks,createCalendarEvent,updateCalendarEvent,deleteCalendarEvent,archiveSharedLock} from "./chaster.js";
 import {keyholderReply} from "./persona.js";
@@ -132,7 +132,7 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
   const eventLabel=(event,actor,other)=>({invited:"<@"+actor+"> invited <@"+other+">",accepted:"<@"+actor+"> accepted <@"+other+">’s invitation",declined:"<@"+actor+"> declined <@"+other+">’s invitation",cancelled:"<@"+actor+"> cancelled an invitation to <@"+other+">",created:"Private session created for <@"+actor+"> and <@"+other+">",closed:"<@"+actor+"> closed the private session with <@"+other+">"}[event]||"Session activity");
   const activityText=activity.length?"\n\n**Recent activity**\n"+activity.map(entry=>"• "+eventLabel(entry.event,entry.actor_id,entry.other_id)+" · <t:"+Math.floor(entry.created_at/1000)+":R>").join("\n"):"\n\nNo session activity yet.";
   const sessionText="**Your private sessions**\n"+(sessions.length?sessions.join("\n"):"No active private sessions found")+(invites.length?"\n\n**Pending invitations**\n"+invites.join("\n"):"\n\nNo pending invitations.")+activityText;
-  const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured")+" · "+(settings.role_sync_enabled===0?"Paused":"Automatic")+"\nRemove inactive roles: "+(settings.role_remove_inactive===0?"No":"Yes");
+  const adminText="**Server settings**\nSession channel: "+(getSessionChannel(guild.id)?"<#"+getSessionChannel(guild.id)+">":"Not configured")+"\nWearer role: "+(settings.wearer_role_id?"<@&"+settings.wearer_role_id+">":"Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?"<@&"+settings.keyholder_role_id+">":"Not configured")+"\nRole sync: "+(settings.wearer_role_id||settings.keyholder_role_id?"Configured":"Not configured")+" · "+(settings.role_sync_enabled===0?"Paused":"Automatic")+"\nRemove inactive roles: "+(settings.role_remove_inactive===0?"No":"Yes")+"\nLocked-status role: "+(settings.locked_role_id?"<@&"+settings.locked_role_id+">":"Not configured")+"\nActive-status role: "+(settings.active_role_id?"<@&"+settings.active_role_id+">":"Not configured");
   const commandDirectory=getDashboardCommandGroups(commands.map(command=>command.toJSON().name),{
     hasWearerRole:Boolean(settings.wearer_role_id&&member.roles.cache.has(settings.wearer_role_id)),
     hasKeyholderRole:Boolean(settings.keyholder_role_id&&member.roles.cache.has(settings.keyholder_role_id)),
@@ -203,7 +203,8 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashadmin:settings:"+userId).setLabel("Configure settings").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashadmin:status-roles:"+userId).setLabel("Lock status roles").setStyle(ButtonStyle.Secondary)
     ));
   }
   if(tab==="community"){
@@ -501,7 +502,9 @@ if(i.customId.startsWith("dashadmin:")){
   if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to manage dashboard settings."});return true;}
   const modal=new ModalBuilder().setCustomId("dashadmin-submit:"+action+":"+userId).setTitle(action==="settings"?"Configure server dashboard":"Retry failed delivery");
   const field=(id,label,required,max=100)=>new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(id).setLabel(label).setStyle(TextInputStyle.Short).setRequired(required).setMaxLength(max));
-  if(action==="automation"){
+  if(action==="status-roles"){
+    modal.addComponents(field("locked_role","Role for locked status (ID or none)",false,25),field("active_role","Role for active status (ID or none)",false,25));
+  }else   if(action==="automation"){
     modal.addComponents(field("sync_enabled","Automatic role sync: yes or no",true,3),field("remove_inactive","Remove roles when inactive: yes or no",true,3));
   }else   if(action==="audit"){
     modal.addComponents(field("action_filter","Action contains (optional)",false,80),field("actor_filter","Actor Discord ID (optional)",false,25),field("search_filter","Search action or details (optional)",false,100),field("days_filter","Time window: 1, 7, 30, 90 days or blank",false,3));
@@ -639,7 +642,24 @@ export async function handleModal(i){
     if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to change server settings."});return true;}
     try{
       let message="";
-      if(action==="automation"){
+      if(action==="status-roles"){
+        const resolveStatusRole=async id=>{
+          const raw=i.fields.getTextInputValue(id).trim();
+          if(!raw)return undefined;
+          if(raw.toLowerCase()==="none")return null;
+          if(!/^\\d{17,20}$/.test(raw))throw new Error("Role IDs must be valid Discord IDs or 'none'.");
+          const role=await i.guild.roles.fetch(raw).catch(()=>null);
+          if(!role)throw new Error("Role "+raw+" was not found in this server.");
+          const me=await i.guild.members.fetchMe();
+          if(role.managed||role.position>=me.roles.highest.position)throw new Error("The bot cannot assign that role because it is managed or at/above its highest role.");
+          return role.id;
+        };
+        const lockedRoleId=await resolveStatusRole("locked_role");
+        const activeRoleId=await resolveStatusRole("active_role");
+        const current=getGuildRoleSettings(i.guildId);
+        if(lockedRoleId!==undefined||activeRoleId!==undefined)setGuildStatusRoles(i.guildId,{lockedRoleId:lockedRoleId===undefined?current.locked_role_id:lockedRoleId,activeRoleId:activeRoleId===undefined?current.active_role_id:activeRoleId},i.user.id);
+        message="Lock-status roles saved. Locked and active status roles will be synced on the next role refresh.";
+      }else       if(action==="automation"){
         const enabledText=i.fields.getTextInputValue("sync_enabled").trim().toLowerCase();
         const removeText=i.fields.getTextInputValue("remove_inactive").trim().toLowerCase();
         if(!["yes","no"].includes(enabledText)||!["yes","no"].includes(removeText))throw new Error("Enter yes or no for both role automation settings.");
