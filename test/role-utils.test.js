@@ -4,7 +4,8 @@ import {
   normalizeLockRows,
   isActiveWearerLock,
   shouldHaveWearerRole,
-  shouldHaveKeyholderRole
+  shouldHaveKeyholderRole,
+  getLockStatusRoleState
 } from "../src/role-utils.js";
 
 test("normalizes supported Chaster lock collection shapes",()=>{
@@ -32,4 +33,10 @@ test("keyholder role requires a non-empty keyholder lock list",()=>{
   assert.equal(shouldHaveKeyholderRole({results:[{id:"lock-2"}]}),true);
   assert.equal(shouldHaveKeyholderRole({locks:[]}),false);
   assert.equal(shouldHaveKeyholderRole({unexpected:[{id:"lock"}]}),false);
+});
+
+test("lock status roles distinguish locked and active states",()=>{
+  assert.deepEqual(getLockStatusRoleState({locks:[{status:"locked"},{status:"expired"}]}),{locked:true,active:false});
+  assert.deepEqual(getLockStatusRoleState([{status:"ACTIVE"}]),{locked:false,active:true});
+  assert.deepEqual(getLockStatusRoleState({locks:[]}),{locked:false,active:false});
 });
