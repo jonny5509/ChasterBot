@@ -114,3 +114,11 @@ This bot intentionally exposes supported Public API operations as focused Discor
 ## Development
 
 Run `npm run check` for JavaScript syntax checks and `npm test` for the automated API and rate-limit retry, token-encryption, OAuth-state, role-classification, and destructive-action confirmation, and Chaster resource-ownership tests. GitHub Actions runs both on pushes and pull requests.
+
+## Discord dashboard
+
+Use `/dashboard` as the main entry point for wearer, keyholder, community and server tools. The Wearer tab provides dashboard actions for your own lock history and details, public profile and public-lock lookups, shared-lock details, your Chaster statistics, and discovery catalogues. The Keyholder tab includes trusted-lock notes, note deletion with confirmation, time-change proposals with confirmation, and keyholder applications. Existing account, calendar, notification, conversation and session controls remain available in their dashboard tabs.
+
+Chaster lookups that reference a private lock or shared lock are checked against the linked account's own lock list before the request is made. Keyholder operations recheck the configured Keyholder role and Chaster's trusted keyholder lock status. Wearer tools require the configured Wearer role. The dashboard is private to the interacting member.
+
+The migration is incremental: retain the existing slash commands until their dashboard replacements have been implemented and verified. `/dashboard` remains the command used to open the control panel.
