@@ -30,8 +30,9 @@ export async function syncUserRoles(client,discordId){
     const member=await guild.members.fetch(discordId).catch(()=>null);
     if(!member)continue;
     servers++;
-    const a=await applyRole(guild,member,s.wearer_role_id,wearer);
-    const b=await applyRole(guild,member,s.keyholder_role_id,keyholder);
+    const removeInactive=s.role_remove_inactive!==0;
+    const a=await applyRole(guild,member,s.wearer_role_id,wearer,removeInactive);
+    const b=await applyRole(guild,member,s.keyholder_role_id,keyholder,removeInactive);
     if(a==="added"||a==="removed")changed++;
     if(b==="added"||b==="removed")changed++;
     if(a==="missing-role"||b==="missing-role"||a==="role-hierarchy"||b==="role-hierarchy")audit(guild.id,discordId,"role_sync_warning","Check role IDs and bot role hierarchy.");
