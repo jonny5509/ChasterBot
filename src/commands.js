@@ -194,14 +194,10 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
   if(tab==="wearer"){
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashwearer:history:"+userId).setLabel("Lock history").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("dashwearer:details:"+userId).setLabel("Lock details").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashwearer:details:"+userId).setLabel("Lock / seal / shared details").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashwearer:profile:"+userId).setLabel("Public profile").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashwearer:public-locks:"+userId).setLabel("Public locks").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashwearer:shared-details:"+userId).setLabel("Shared lock details").setStyle(ButtonStyle.Secondary)
-    ));
-    rows.push(new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("dashwearer:my-stats:"+userId).setLabel("My Chaster stats").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("dashwearer:catalog:"+userId).setLabel("Explore Chaster").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashwearer:my-stats:"+userId).setLabel("My stats & explore").setStyle(ButtonStyle.Success)
     ));
   }
   if(tab==="keyholder"){
@@ -526,8 +522,8 @@ if(i.customId.startsWith("dashwearer:")){
       const token=await accessToken(i.user.id);let raw;
       if(action==="my-stats"){
         const profile=await getCurrentProfile(token),id=String(profile.id||profile._id||"");
-        const [stats,achievements,badges,calendar]=await Promise.all([getUserProfileStatistics(profile.username||id,token),id?getUserAchievements(id,token):Promise.resolve(null),getUserBadgeCount(token),getCalendarStatistics(token)]);
-        raw={profile,statistics:stats,achievements,badges,calendar};
+        const [stats,achievements,badges,calendar,extensions,categories,tags,blocks,ignored,settingsData,permissions,achievementCategories,communityCategories]=await Promise.all([getUserProfileStatistics(profile.username||id,token),id?getUserAchievements(id,token):Promise.resolve(null),getUserBadgeCount(token),getCalendarStatistics(token),getExtensions(token),getExploreCategories(token),getSharedLockTags(token),getBlockedUsers(token),getIgnoredUsers(token),getChasterSettings(token),getPermissionDefinitions(token),getAchievementCategories(token),getCommunityEventCategories(token)]);
+        raw={profile,statistics:stats,achievements,badges,calendar,extensions,categories,sharedLockTags:tags,blockedUsers:blocks,ignoredUsers:ignored,chasterSettings:settingsData,permissionDefinitions:permissions,achievementCategories,communityCategories};
       }else{
         const [extensions,categories,tags,achievementCategories,communityCategories]=await Promise.all([getExtensions(token),getExploreCategories(token),getSharedLockTags(token),getAchievementCategories(token),getCommunityEventCategories(token)]);
         raw={extensions,categories,sharedLockTags:tags,achievementCategories,communityCategories};
@@ -536,8 +532,8 @@ if(i.customId.startsWith("dashwearer:")){
     }catch(error){await i.editReply("Could not load Chaster data: "+(error.message||"request failed"));}
     return true;
   }
-  const labels={history:"Lock history",details:"Lock details",profile:"Public Chaster profile", "public-locks":"Public Chaster locks","shared-details":"Shared lock details"};
-  const fields={history:["lock_id","Chaster lock ID"],details:["lock_id","Chaster lock ID"],profile:["username","Chaster username"],"public-locks":["user_id","Chaster user ID"],"shared-details":["shared_lock_id","Shared lock ID"]};
+  const labels={history:"Lock history",details:"Lock details, seal or shared lock",profile:"Public Chaster profile", "public-locks":"Public Chaster locks"};
+  const fields={history:["lock_id","Your Chaster lock ID"],details:["lock_id","Lock ID, or shared:ID / seal:ID"],profile:["username","Chaster username"],"public-locks":["user_id","Chaster user ID"]};
   const spec=fields[action];if(!spec){await i.reply({ephemeral:true,content:"Unknown Wearer action."});return true;}
   const modal=new ModalBuilder().setCustomId("dashwearer-submit:"+action+":"+userId).setTitle(labels[action]);
   modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(spec[0]).setLabel(spec[1]).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
@@ -709,15 +705,11 @@ export async function handleModal(i){
         if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No history request was made.");
         raw=await getLockHistory(id,token);
       }else if(action==="details"){
-        const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);
-        if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No details request was made.");
-        raw=await getLockDetails(id,token);
+        if(id.startsWith("shared:")){const sharedId=id.slice(7),own=await getSharedLocks(token);if(!sharedId||!isOwnedResourceListed(own,sharedId,["items","locks","sharedLocks","data"],"_id","id"))throw new Error("That shared lock is not in your own shared-lock list. No details request was made.");raw=await getSharedLockDetails(sharedId,token);}
+        else if(id.startsWith("seal:")){const lockId=id.slice(5),own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);if(!locks.some(lock=>String(lock._id||lock.id)===lockId))throw new Error("That lock is not in your own wearer lock list. No seal request was made.");raw=await getLockSeal(lockId,token);}
+        else {const own=await getMyLocks(token),locks=Array.isArray(own)?own:(own?.locks||own?.items||own?.data||[]);if(!locks.some(lock=>String(lock._id||lock.id)===id))throw new Error("That lock is not in your own wearer lock list. No details request was made.");raw=await getLockDetails(id,token);}
       }else if(action==="profile")raw=await getUserProfileOverview(id,token);
       else if(action==="public-locks")raw=await getPublicLocks(id,token);
-      else if(action==="shared-details"){
-        const own=await getSharedLocks(token);
-        if(!isOwnedResourceListed(own,id,["items","locks","sharedLocks","data"],"_id","id"))throw new Error("That shared lock is not in your own shared-lock list. No details request was made.");
-        raw=await getSharedLockDetails(id,token);
       }else throw new Error("Unknown Wearer action.");
       await i.editReply("**Chaster "+action+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
     }catch(error){await i.editReply("Could not complete this Chaster lookup: "+(error.message||"request failed"));}
