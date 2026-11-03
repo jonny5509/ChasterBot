@@ -627,6 +627,54 @@ return true;
 if(!i.customId.startsWith("tc:")&&!i.customId.startsWith("tx:"))return false;const [action,id]=i.customId.split(":");const result=consumeConfirmation(pending,id,i.user.id,"time-change",action,"tc","tx");const p=result.entry;if(result.status==="invalid"){await i.reply({ephemeral:true,content:"Confirmation expired or belongs to another user."});return true;}if(result.status==="expired"){await i.update({content:"Confirmation expired. No change made.",components:[]});return true;}if(result.status==="cancelled"){await i.update({content:"Cancelled. No Chaster change made.",components:[]});return true;}const roleSettings=getRoleSettings().find(x=>x.guild_id===p.guildId);const keyholderRoleId=roleSettings?.keyholder_role_id;const member=await i.guild?.members.fetch(i.user.id).catch(()=>null);if(!keyholderRoleId||!member?.roles.cache.has(keyholderRoleId)){await i.update({content:"Your Keyholder role is no longer present. No Chaster change was made.",components:[]});return true;}await i.update({content:"Rechecking keyholder access and sending confirmed request…",components:[]});try{const token=await accessToken(i.user.id);const raw=await getKeyholderLocks(token);const a=Array.isArray(raw)?raw:(raw?.locks||[]);const lock=a.find(x=>String(x._id||x.id)===p.lockId);if(!lock||lock.trusted!==true||lock.role!=="keyholder")throw new Error("Keyholder authorization, role or trust check failed.");await updateLockTime(p.lockId,p.seconds,token);audit(p.guildId,i.user.id,"chaster_time_change",p.lockId+" duration="+p.seconds+" reason="+p.reason);await i.followUp({ephemeral:true,content:"Chaster accepted the update request. Check the lock in Chaster to verify the timer."});}catch(e){console.error("Time change failed:",e.message);await i.followUp({ephemeral:true,content:"Chaster did not confirm the change: "+e.message});}return true;}
 
 export async function handleModal(i){
+  if(i.customId.startsWith("dashadmin-submit:")){
+    const [,action,userId]=i.customId.split(":");
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    if(!i.guild||!i.memberPermissions?.has(PermissionFlagsBits.ManageGuild)){await i.reply({ephemeral:true,content:"You need Manage Server to change server settings."});return true;}
+    try{
+      let message="";
+      if(action==="settings"){
+        const value=id=>i.fields.getTextInputValue(id).trim();
+        const resolveRole=async id=>{
+          const raw=value(id);if(!raw)return undefined;if(raw.toLowerCase()==="none")return null;
+          if(!/^\d{17,20}$/.test(raw))throw new Error("Role IDs must be valid Discord IDs or 'none'.");
+          const role=await i.guild.roles.fetch(raw).catch(()=>null);if(!role)throw new Error("Role "+raw+" was not found in this server.");
+          const me=await i.guild.members.fetchMe();
+          if(role.managed||role.position>=me.roles.highest.position)throw new Error("The bot cannot assign that role because it is managed or at/above its highest role.");
+          return role.id;
+        };
+        const resolveChannel=async id=>{
+          const raw=value(id);if(!raw)return undefined;if(raw.toLowerCase()==="none")return null;
+          if(!/^\d{17,20}$/.test(raw))throw new Error("Channel IDs must be valid Discord IDs or 'none'.");
+          const channel=await i.guild.channels.fetch(raw).catch(()=>null);
+          if(!channel||channel.type!==ChannelType.GuildText)throw new Error("Channel "+raw+" must be a text channel in this server.");
+          return channel;
+        };
+        const current=getGuildRoleSettings(i.guildId);
+        const wearer=await resolveRole("wearer_role"),keyholder=await resolveRole("keyholder_role");
+        if(wearer!==undefined||keyholder!==undefined)setGuildRoles(i.guildId,wearer===undefined?current.wearer_role_id:wearer,keyholder===undefined?current.keyholder_role_id:keyholder,i.user.id);
+        const me=await i.guild.members.fetchMe();
+        const session=await resolveChannel("session_channel");
+        if(session!==undefined){
+          if(session&&!session.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.CreatePrivateThreads,PermissionFlagsBits.SendMessagesInThreads]))throw new Error("The bot needs View Channel, Send Messages, Create Private Threads and Send Messages in Threads in the session channel.");
+          setSessionChannel(i.guildId,session?.id??null,i.user.id);
+        }
+        const notification=await resolveChannel("notification_channel");
+        if(notification&&!notification.permissionsFor(me)?.has([PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages]))throw new Error("The bot needs View Channel and Send Messages in the notification channel.");
+        if(notification!==undefined)setNotificationChannel(i.guildId,notification?.id??null,i.user.id);
+        const retention=value("retention");
+        if(retention){if(!["7","30","90"].includes(retention))throw new Error("Notification retention must be 7, 30 or 90 days.");setNotificationRetentionDays(i.guildId,Number(retention),i.user.id);}
+        message="Server settings saved. Refresh the Admin tab to see the updated configuration.";
+      }else if(action==="retry"){
+        const idText=i.fields.getTextInputValue("queue_id").trim();
+        if(!/^\d+$/.test(idText)||!retryFailedDiscordNotification(Number(idText),i.guildId))throw new Error("That failed notification was not found for this server, or it is no longer eligible for retry.");
+        audit(i.guildId,i.user.id,"notification_retry_requested","queue #"+idText);
+        message="Queued notification #"+idText+" for retry.";
+      }else throw new Error("Unknown admin action.");
+      await i.reply({ephemeral:true,content:message});
+    }catch(error){await i.reply({ephemeral:true,content:error.message||"The admin action failed."});}
+    return true;
+  }
   if(i.customId.startsWith("dashcommunity-submit:")){
     const [,action,userId]=i.customId.split(":");
     if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
