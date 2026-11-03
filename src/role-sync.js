@@ -36,7 +36,8 @@ export async function syncUserRoles(client,discordId){
     const b=await applyRole(guild,member,s.keyholder_role_id,keyholder,removeInactive);
     const c=await applyRole(guild,member,s.locked_role_id,locked,removeInactive);
     const d=await applyRole(guild,member,s.active_role_id,active,removeInactive);
-    const minimumLocked=hasMinimumLockedDuration(ownRaw,s.minimum_locked_hours);\n    const e=await applyRole(guild,member,s.minimum_locked_role_id,minimumLocked,removeInactive);
+    const minimumLocked=hasMinimumLockedDuration(ownRaw,s.minimum_locked_hours);
+    const e=await applyRole(guild,member,s.minimum_locked_role_id,minimumLocked,removeInactive);
     if(a==="added"||a==="removed")changed++;
     if(b==="added"||b==="removed")changed++;
     if(c==="added"||c==="removed")changed++;
