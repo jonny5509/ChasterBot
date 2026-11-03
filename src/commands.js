@@ -160,7 +160,17 @@ async function buildMemberDashboard(guild,user,isAdmin=false,tab="overview"){
     body="**Your Chaster calendar**\n"+(extraLoadError?extraLoadError:calendarEvents.length?calendarEvents.slice(0,12).map(event=>"• **"+String(event.title||event.name||event.type||"Event").slice(0,55)+"** · "+String(event.startDate||event.start||event.date||"date unavailable")+" · ID: "+String(event._id||event.id||event.eventId||"unknown")).join("\n"):"No calendar events returned.")+"\n\nCreate a lock-period event or request deletion of an event below. Deletion is revalidated against your own Chaster calendar and requires confirmation.";
   }
   else if(tab==="commands")body="**Command directory**\nCommands are shown when your current server permissions and configured roles allow them.\n\n"+(commandDirectory||"No commands available for your current roles and permissions.");
-  else if(tab==="admin")body=isAdmin?adminText:"You do not have permission to view server settings.";
+  else if(tab==="admin"){
+    if(!isAdmin)body="You do not have permission to view server settings.";
+    else{
+      const queue=getDiscordNotificationQueueStats(guild.id),report=getDiscordNotificationDeliveryReport(guild.id,7),failed=getFailedDiscordNotifications(guild.id,5),auditRows=recentAudit(guild.id,6);
+      body=adminText+"\nNotification channel: "+(getNotificationChannel(guild.id)?"<#"+getNotificationChannel(guild.id)+">":"Not configured")+"\nRetention: "+getNotificationRetentionDays(guild.id)+" days";
+      body+="\n\n**Notification delivery**\nPending: "+queue.pending+" · Sent: "+queue.sent+" · Failed: "+queue.failed+"\n7-day success rate: "+(report.successRate===null?"No completed deliveries":report.successRate+"%");
+      body+="\n\n**Failed deliveries**\n"+(failed.length?failed.map(x=>"#"+x.id+" · "+x.attempts+" attempts · "+String(x.last_error||"No error detail").slice(0,90)).join("\n"):"None");
+      body+="\n\n**Recent audit**\n"+(auditRows.length?auditRows.map(x=>"• "+x.action+" · "+String(x.details).slice(0,70)).join("\n"):"No audit events yet.");
+      body+="\n\nUse Configure settings to update roles, channels and retention. Retry a failed delivery by its queue ID.";
+    }
+  }
   else body="**At a glance**\nAccount: "+(linked?(linkHealth?.status==="needs_reauth"?"Reconnect required":"Linked"):"Not linked")+"\nWearer role: "+(settings.wearer_role_id?(member.roles.cache.has(settings.wearer_role_id)?"Assigned":"Not assigned"):"Not assigned")+(settings.wearer_role_id?"":" · Not configured")+"\nKeyholder role: "+(settings.keyholder_role_id?(member.roles.cache.has(settings.keyholder_role_id)?"Assigned":"Not assigned"):"Not configured")+"\nActive private sessions: "+sessions.length+"\nPending invitations: "+invites.length+"\nActive wearer locks: "+personalLocks.length+"\nActive keyholder locks: "+keyholderLocks.length+(lockLoadError?"\nLock data: unavailable":"")+"\n\nChoose a tab below to see details.";
   return (title+"\n\n"+body+"\n\nPrivate to you · refreshed on demand").slice(0,1950);
 }
@@ -187,6 +197,12 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary)
     ];
     rows.push(new ActionRowBuilder().addComponents(...actions));
+  }
+  if(tab==="admin"&&isAdmin){
+    rows.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("dashadmin:settings:"+userId).setLabel("Configure settings").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary)
+    ));
   }
   if(tab==="community"){
     const actions=[new ButtonBuilder().setCustomId("dashcommunity:create:"+userId).setLabel("Create challenge").setStyle(ButtonStyle.Success),new ButtonBuilder().setCustomId("dashcommunity:join:"+userId).setLabel("Join challenge").setStyle(ButtonStyle.Primary),new ButtonBuilder().setCustomId("dashcommunity:approve:"+userId).setLabel("Approve entry").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:reward:"+userId).setLabel("Add reward idea").setStyle(ButtonStyle.Secondary),new ButtonBuilder().setCustomId("dashcommunity:punishment:"+userId).setLabel("Add optional consequence").setStyle(ButtonStyle.Secondary)];
