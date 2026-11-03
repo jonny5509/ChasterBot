@@ -213,7 +213,8 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
       new ButtonBuilder().setCustomId("dashkeyholder:notes:"+userId).setLabel("View lock notes").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId("dashkeyholder:delete-notes:"+userId).setLabel("Delete lock notes").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("dashkeyholder:time:"+userId).setLabel("Propose time change").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("dashkeyholder:applications:"+userId).setLabel("View applications").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashkeyholder:applications:"+userId).setLabel("View applications").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashpersona:chat:"+userId).setLabel("Keyholder chat").setStyle(ButtonStyle.Success)
     ];
     rows.push(new ActionRowBuilder().addComponents(...actions));
   }
@@ -550,6 +551,13 @@ if(i.customId.startsWith("dashwearer:")){
   modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(spec[0]).setLabel(spec[1]).setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(100)));
   await i.showModal(modal);return true;
 }
+if(i.customId.startsWith("dashpersona:chat:")){
+  const userId=i.customId.split(":")[2];
+  if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+  const modal=new ModalBuilder().setCustomId("dashpersona-submit:"+userId).setTitle("Keyholder chat");
+  modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("message").setLabel("Your message").setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(700)));
+  await i.showModal(modal);return true;
+}
 if(i.customId.startsWith("dashkeyholder:")&&i.customId.includes(":applications:")){
   const [,action,userId]=i.customId.split(":");
   if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
@@ -739,6 +747,16 @@ export async function handleModal(i){
       }else throw new Error("Unknown Wearer action.");
       await i.editReply("**Chaster "+action+"**\n```json\n"+JSON.stringify(raw,null,2).replace(/@/g,"＠").slice(0,1750)+"\n```");
     }catch(error){await i.editReply("Could not complete this Chaster lookup: "+(error.message||"request failed"));}
+    return true;
+  }
+  if(i.customId.startsWith("dashpersona-submit:")){
+    const userId=i.customId.split(":")[1];
+    if(userId!==i.user.id){await i.reply({ephemeral:true,content:"This dashboard belongs to another member."});return true;}
+    const message=i.fields.getTextInputValue("message").trim();
+    if(!message){await i.reply({ephemeral:true,content:"Enter a message."});return true;}
+    await i.deferReply({ephemeral:true});
+    try{await i.editReply(await keyholderReply(message,i.user.username));}
+    catch(error){await i.editReply("Keyholder chat is unavailable: "+(error.message||"request failed"));}
     return true;
   }
   if(i.customId.startsWith("dashnotify-submit:")){
