@@ -16,11 +16,12 @@ async function applyRole(guild,member,roleId,shouldHave,removeInactive=true){
 export async function syncUserRoles(client,discordId){
   const account=getAllLinkedAccounts().find(x=>x.discord_id===discordId);
   if(!account)throw new Error("Link your Chaster account first with /link-chaster.");
-  const settings=getRoleSettings().filter(s=>s.role_sync_enabled!==0&&(s.wearer_role_id||s.keyholder_role_id));\n  if(!settings.length)return {wearer:false,keyholder:false,servers:0,changed:0,message:"Automatic role sync is disabled or no Chaster roles are configured in your servers."};\n  const tokens=await getTokensForDiscordUser(discordId);
+  const settings=getRoleSettings().filter(s=>s.role_sync_enabled!==0&&(s.wearer_role_id||s.keyholder_role_id));
+  if(!settings.length)return {wearer:false,keyholder:false,servers:0,changed:0,message:"Automatic role sync is disabled or no Chaster roles are configured in your servers."};
+  const tokens=await getTokensForDiscordUser(discordId);
   const [ownRaw,keyholderRaw]=await Promise.all([getMyLocks(tokens.access_token),getKeyholderLocks(tokens.access_token)]);
   const wearer=shouldHaveWearerRole(ownRaw);
   const keyholder=shouldHaveKeyholderRole(keyholderRaw);
-  const settings=getRoleSettings();
   let changed=0,servers=0;
   for(const s of settings){
     if(!s.wearer_role_id&&!s.keyholder_role_id)continue;
