@@ -5,7 +5,8 @@ import {
   isActiveWearerLock,
   shouldHaveWearerRole,
   shouldHaveKeyholderRole,
-  getLockStatusRoleState
+  getLockStatusRoleState,
+  hasMinimumLockedDuration
 } from "../src/role-utils.js";
 
 test("normalizes supported Chaster lock collection shapes",()=>{
@@ -39,4 +40,13 @@ test("lock status roles distinguish locked and active states",()=>{
   assert.deepEqual(getLockStatusRoleState({locks:[{status:"locked"},{status:"expired"}]}),{locked:true,active:false});
   assert.deepEqual(getLockStatusRoleState([{status:"ACTIVE"}]),{locked:false,active:true});
   assert.deepEqual(getLockStatusRoleState({locks:[]}),{locked:false,active:false});
+});
+
+test("minimum locked duration requires a current locked status and elapsed start time",()=>{
+  const now=Date.parse("2026-01-10T12:00:00Z");
+  assert.equal(hasMinimumLockedDuration([{status:"locked",startDate:"2026-01-10T00:00:00Z"}],12,now),true);
+  assert.equal(hasMinimumLockedDuration([{status:"locked",startDate:"2026-01-10T06:00:00Z"}],12,now),false);
+  assert.equal(hasMinimumLockedDuration([{status:"active",startDate:"2026-01-01T00:00:00Z"}],12,now),false);
+  assert.equal(hasMinimumLockedDuration([{status:"locked"}],12,now),false);
+  assert.equal(hasMinimumLockedDuration([{status:"locked",startDate:"2026-01-01T00:00:00Z"}],0,now),false);
 });
