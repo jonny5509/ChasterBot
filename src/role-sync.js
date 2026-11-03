@@ -1,7 +1,7 @@
 import {getRoleSettings,getAllLinkedAccounts,audit} from "./db.js";
 import {getTokensForDiscordUser} from "./oauth.js";
 import {getMyLocks,getKeyholderLocks} from "./chaster.js";
-import {shouldHaveWearerRole,shouldHaveKeyholderRole,normalizeLockRows} from "./role-utils.js";
+import {shouldHaveWearerRole,shouldHaveKeyholderRole,getLockStatusRoleState} from "./role-utils.js";
 
 async function applyRole(guild,member,roleId,shouldHave,removeInactive=true){
   if(!roleId)return "not-configured";
@@ -22,9 +22,7 @@ export async function syncUserRoles(client,discordId){
   const [ownRaw,keyholderRaw]=await Promise.all([getMyLocks(tokens.access_token),getKeyholderLocks(tokens.access_token)]);
   const wearer=shouldHaveWearerRole(ownRaw);
   const keyholder=shouldHaveKeyholderRole(keyholderRaw);
-  const ownLocks=normalizeLockRows(ownRaw);
-  const locked=ownLocks.some(lock=>String(lock?.status||"").toLowerCase()==="locked");
-  const active=ownLocks.some(lock=>String(lock?.status||"").toLowerCase()==="active");
+  const {locked,active}=getLockStatusRoleState(ownRaw);
   let changed=0,servers=0;
   for(const s of settings){
     if(!s.wearer_role_id&&!s.keyholder_role_id&&!s.locked_role_id&&!s.active_role_id)continue;
