@@ -202,7 +202,8 @@ function buildDashboardComponents(guild,userId,isAdmin,tab="overview"){
     rows.push(new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("dashadmin:settings:"+userId).setLabel("Configure settings").setStyle(ButtonStyle.Primary),
       new ButtonBuilder().setCustomId("dashadmin:retry:"+userId).setLabel("Retry failed delivery").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary),\n      new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId("dashadmin:audit:"+userId).setLabel("Search / export audit").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("dashadmin:automation:"+userId).setLabel("Role automation").setStyle(ButtonStyle.Secondary)
     ));
   }
   if(tab==="community"){
